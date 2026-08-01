@@ -10,20 +10,29 @@ the pet (Forest-style accountability), which is the core retention hook.
 
 ## Platform & Stack
 
-- iOS only for MVP (Apple Developer account + Mac already available)
-- React Native + Expo (EAS Build/Submit for iOS packaging and store upload)
-- No custom backend — all state stored locally on-device
+- iOS only for MVP. Mac already available; **Apple Developer account enrollment is deliberately
+  deferred** — the whole MVP is built and demoed for free via Expo Go, and the $99/yr enrollment
+  only happens after the free build is used and liked (see the decision gate in `PLAN.md`, M6a)
+- React Native + Expo, **pinned to SDK ~54** (the only version the App Store build of Expo Go
+  supports — see `PLAN.md`), EAS Build/Submit for iOS packaging and store upload once paid
+- Animation: Reanimated 4 + Skia (both ship inside Expo Go). Not Lottie/Rive (need a paid-account
+  dev client) and not Moti (incompatible with Reanimated 4 on SDK 54)
+- No custom backend — all state stored locally on-device (Zustand + AsyncStorage)
 
 ## MVP Feature Set (in scope)
 
 1. **Pomodoro timer** — start/pause/reset, customizable work and break lengths
-2. **One starter pet species** (e.g. a single fish type) with a few growth stages
-3. **Session → reward loop** — completing a full session earns currency toward pet growth/new fish
-4. **Merge mechanic** — combine N small fish into 1 bigger fish
-5. **Leave-early penalty** — exiting the app mid-session sets the pet back (accountability hook)
+2. **One starter pet species** (e.g. a single fish type) with 3 growth stages (Fry/Juvenile/Elder)
+3. **Session → reward loop** — completing a session grows a fish's XP *within* its current stage
+4. **Merge mechanic** — merging N same-stage fish is the only way to *cross* a stage boundary
+   (resolves the growth-vs-merge ambiguity: sessions grow, merging advances)
+5. **Leave-early penalty** — sustained backgrounding (not brief `inactive` states like Control
+   Center or a phone call) forfeits in-progress growth and marks the fish `sick` (desaturated,
+   recovers on the next completed session). The fish itself is never deleted
 6. **Streaks** — consecutive days with at least one completed session
 7. **Basic local stats** — today's total focus time, current streak, all-time total
-8. **Monetization: IAP species unlock** — free app ships with one species; additional species/biomes sold as one-time unlocks
+8. **Monetization: IAP species unlock, built against a mock provider for the free phase** — full
+   shop/paywall UX is part of MVP; real payments are wired in only after Apple Developer enrollment
 
 ## Explicitly Out of Scope for MVP
 
@@ -31,11 +40,16 @@ Everything else discussed lives in `FUTURE_FEATURES.md` — Game Center leaderbo
 Apple Watch app, widgets, custom backend/regional leaderboards, Health integration, ambient sound,
 social sharing, Android port.
 
-## Definition of Done
+## Definition of Done — free phase (M0–M6a, no money spent)
 
-- App builds and runs on a physical device via TestFlight
+- App runs on a physical device via App Store Expo Go (SDK 54)
 - A user can complete the full loop: start timer → finish session → earn fish → merge fish → see streak update
-- Leaving early visibly penalizes the pet
-- At least one IAP unlock is purchasable and tested in sandbox
+- Leaving early visibly penalizes the pet, and recovery on the next session is visible
+- Shop/paywall UX is fully demoable against the mock entitlement provider
+- **This is the checkpoint to decide whether the app is worth paying to publish**
+
+## Definition of Done — paid phase (M6b–M7, only after the gate above)
+
+- Real IAP wired in and tested in App Store Connect sandbox
 - App Store Connect listing is complete (screenshots, description, privacy policy, age rating)
 - App passes Apple review and is live on the App Store

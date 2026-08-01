@@ -27,7 +27,18 @@ App name is a placeholder ("Pomo Pet") — rename throughout once a real name is
 - React Native + Expo, EAS Build/Submit — no native Xcode GUI workflow needed for builds
 - No custom backend for MVP — Game Center (free, built-in) covers leaderboards later instead of
   building a server
-- Local-only data persistence for MVP
+- Local-only data persistence for MVP (Zustand + AsyncStorage, versioned schema from day one)
+- **Build order is free-first**: the entire MVP (M0–M6a in `docs/PLAN.md`) is built and demoed via
+  App Store Expo Go with zero Apple Developer spend. The $99/yr enrollment happens only after the
+  user has used the finished free build and decided they like it — do not suggest enrolling earlier
+- **Expo SDK pinned to ~54.x, do not upgrade.** The App Store build of Expo Go only supports SDK
+  54; anything newer requires a paid-account dev client and breaks the free-testing plan
+- Animation stack: **Reanimated 4 + Skia** (both ship inside Expo Go). Explicitly not Lottie/Rive
+  (need a dev client) and not Moti (incompatible with Reanimated 4 on this SDK)
+- IAP is built against a `MockEntitlementProvider` for the whole free phase; swapped for
+  RevenueCat only in M6b, after enrollment
+- Growth vs. merge: sessions grow a fish's XP *within* its current stage; merging N same-stage
+  fish is the only way to *cross* a stage boundary
 
 ## Tooling reference
 
@@ -44,3 +55,7 @@ Workaround until upstream fixes it: the actual command files are still present l
 `~/.claude/plugins/marketplaces/claude-code-toolkit/plugins/{react-native-dev,ios-developer}/commands/`
 and can be read directly for reference/inspiration when implementation starts, even though they
 aren't usable as installed slash commands.
+
+Separately, https://github.com/nextlevelbuilder/ui-ux-pro-max-skill is installed and working
+(`ui-ux-pro-max@ui-ux-pro-max-skill`) — design-system generation (styles, palettes, font pairings)
+that activates automatically once real UI code is being written.
