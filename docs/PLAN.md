@@ -457,13 +457,187 @@ Shop, which is M6a's job. What remains is phone-only: the layout gate below.
   has now made *user-visible* on a labelled tile. Whatever gets decided about the give-up
   exemption now has a UI consequence too.
 
-## M6a — Shop UX against the mock provider (free)
+## M6a — Shop UX against the mock provider (free)  [~] built and unit-tested, awaiting the gate
 
-- [ ] `EntitlementProvider` interface + `MockEntitlementProvider` behind a dev-menu toggle
-- [ ] Full paywall, locked-species presentation, unlock animation, restore-purchases flow —
-      demoable end to end with zero real money spent
+**This is the last MVP milestone. Every line of the free-phase MVP is now written.** What is left
+is the part no terminal can do: using it on your phone, and then deciding about the $99.
+
+- [x] `EntitlementProvider` interface + `MockEntitlementProvider`.
+      `src/features/shop/EntitlementProvider.ts` is shaped after what a real IAP SDK exposes
+      (RevenueCat's `getCustomerInfo` / `purchasePackage` / `restorePurchases`), not after this
+      app's store — it deals only in species ids and never touches `useAppStore`, so M6b is a
+      one-file swap. `purchaseSpecies` **resolves rather than rejects**, with a typed
+      `cancelled` / `network` / `already-owned` / `unknown` reason, because a real purchase fails
+      for reasons that are not exceptions. The mock is genuinely async (a real timer-backed delay,
+      so loading states are exercised for real) and fails `SHOP.mockPurchaseFailureRate` of the
+      time on purpose, so the UI has a failure path it must actually render.
+- [ ] ~~behind a dev-menu toggle~~ — **deliberately not built, and this bullet is retired rather
+      than met.** There is no second provider to toggle *to* until M6b, so the switch would select
+      between the mock and nothing. `ShopScreen.tsx` imports the singleton directly, which is the
+      one line M6b edits. (If a dev menu does get built, the thing worth putting in it is not a
+      provider switch — see the XP-grant note under "the gate is not really decidable yet" below.)
+- [x] Two purchasable species alongside the starter — Golden Koi ($1.99) and Indigo Betta ($2.99),
+      priced in `SHOP.speciesPriceUsd`. Both are parameter records in the same procedural system
+      as the starter (hue/saturation/lightness + per-stage geometry), which is the whole argument
+      for staying 2D: a new SKU is a few dozen lines, not a rigged asset. `model.test.ts` pins that
+      every non-starter species in `SPECIES` has a price, so one can never ship unsellable by
+      omission.
+- [x] Locked-species presentation, unlock animation, restore flow. `SpeciesSwatch` draws each
+      species' Elder silhouette from the real geometry (not an icon), desaturated via
+      `HEALTH.sickSaturationMultiplier` when locked — reusing the M4 sick-fish constant rather than
+      inventing a second desaturation rule. A purchase shows a real "Buying…" state, then pops the
+      row with `springs.celebrate` (the M3 merge-reveal spring) and fires a `ParticleBurst`, both
+      skipped under Reduce Motion. Owned rows get a "Set active" / "Hatching next" toggle that
+      chooses which species new fry hatch as (`settings.activeSpeciesId`).
+- [x] `SCHEMA_VERSION` 3 → 4 for `settings.activeSpeciesId`, with a real migration defaulting to
+      the starter. `awardSessionCompletion` additionally re-validates the id against
+      `entitlements.unlockedSpeciesIds` on **every** read, so a stale or corrupt value can never
+      reach `reward.ts` — belt and braces, because the field is the one piece of settings that
+      depends on entitlements.
 - [ ] **Decision gate: this is the checkpoint to decide whether the app is worth the $99.**
-      Everything through here required no Apple Developer account and no Xcode.
+      Everything through here required no Apple Developer account and no Xcode. See the
+      consolidated on-device checklist below — it covers all six milestones, not just this one.
+
+Verified on 2026-08-02 by an independent review pass, machine-checkable parts only:
+
+- `npm test` → **286 tests, 18 suites, all passing** (218 at M5)
+  - `MockEntitlementProvider.test.ts` (14) — ownership reads go through the live store, the delay
+    is real (the promise is observably pending), the failure roll is driven by the config constant
+    rather than a hardcoded threshold, and a purchase survives a simulated app restart via
+    `persist.rehydrate()` against a raw AsyncStorage payload
+  - `ShopScreen.test.tsx` (10, new at this review) — the write split, described below
+  - `useAppStore.test.ts` — `unlockSpecies` idempotence, `syncUnlockedSpeciesIds` as a union,
+    `setActiveSpecies` refusing an unowned species, and the spawn-species fallback
+  - `migrations.test.ts` — the v3→v4 `activeSpeciesId` step and the full v1→v4 walk
+  - `merge.test.ts` — mixed-species rejection now driven off `SPECIES_ORDER` across every ordered
+    pair, rather than one hand-written pair that a third species would have quietly bypassed
+- `npx tsc --noEmit` → clean
+- `npx expo-doctor` → 18/18 checks passed
+- `npx expo export --platform ios` → succeeds; Hermes bundle **4.72 MB** (4.71 MB at M5)
+
+### The write split, traced — the thing M6b inherits
+
+`MockEntitlementProvider.purchaseSpecies` deliberately never writes to `useAppStore`; it reports
+what happened, and `ShopScreen` applies a success via `unlockSpecies`. That is the right division
+— RevenueCat has no idea `useAppStore` exists — but it means there is a window where the provider
+considers a purchase made and the local store does not know yet. Traced all the ways that write
+could be skipped:
+
+- **Unmount mid-await** (a tab switch during the ~1s round trip) — **safe.** The write is the
+  first statement after a successful result and is deliberately *not* behind an is-mounted check;
+  only the `setState` calls after it no-op post-unmount, which is harmless. Now pinned by a test
+  that unmounts the screen mid-purchase and asserts the store still gets the species.
+- **A throw after the await resolves** — **safe, and made safer.** Nothing can run before
+  `unlockSpecies`, and a zustand `set` does not throw. But the `try` previously wrapped the write
+  *and everything after it*, so a throw past the await would have reported a purchase that
+  succeeded **and was applied** as a failure. The `try` is now narrowed to the provider call alone.
+- **A same-frame double tap** — **this one was open, and is now fixed.** `disabled={pending}` is
+  derived from React state, which does not exist yet for a second tap in the same frame; both got
+  through and both called the provider. Invisible against the mock (its `isOwned` still reads false
+  for the second call, and `unlockSpecies` is idempotent) — which is exactly why it had to be
+  closed *now*, because at M6b that line is `purchasePackage` and calling it twice for one product
+  is a double charge. Closed with a per-species ref. **Same lesson as the M3 merge double-tap:
+  React state is not a lock.**
+
+**Verdict: the call site's half of the contract is now sound. The risk that remains is
+structural and belongs to M6b**, spelled out under "known and accepted limitations" below.
+
+### `docs/MVP.md` "Definition of Done — free phase" checked rule by rule
+
+| Rule | Verdict |
+| --- | --- |
+| App runs on a physical device via App Store Expo Go (SDK 54) | **Not met — needs you.** Everything checkable from here says yes: `expo` resolves to 54.x, `expo-doctor` 18/18, an iOS bundle exports. Nothing has ever been opened on a phone. |
+| Full loop: start timer → finish session → earn fish → merge fish → see streak update | **Built, but only partly demoable.** Timer, session reward and streak are reachable in minutes. **Merge is not** — see the pacing item below. |
+| Leaving early visibly penalizes the pet, and recovery on the next session is visible | **Built; "visibly" is phone-only.** The rule, the 8s grace, the desaturation, the slowed tail wag and the wince are all real and tested. Whether grey-and-sluggish *reads* as "your fish is unwell" is item 4 on the checklist. |
+| Shop/paywall UX is fully demoable against the mock entitlement provider | **Met for the UX; two honest caveats.** Buying, failing, retrying, the locked treatment, the unlock animation and the active-species toggle are all genuinely demoable and persist across a restart. But restore is a no-op against a store-backed mock, and a purchase has no visible consequence anywhere outside the Shop row. |
+| This is the checkpoint to decide whether the app is worth paying to publish | **Reached, but weakened.** Two of the eight MVP features — merge and buyable species — cannot realistically be experienced before deciding. Worth fixing before you decide, not after. |
+
+### Consolidated on-device checklist — everything to test on your phone, all six milestones
+
+This replaces the six per-milestone gates scattered above; they all still stand, but this is the
+list to actually work through, in order, in one sitting. Start with `npx expo start` and scan the
+QR with **App Store Expo Go**.
+
+1. **It opens at all** (M0). All five tabs load: Focus, Aquarium, Stats, Shop, Settings. The
+   first-launch onboarding appears, scrolls cleanly on your device, and does **not** come back on
+   the next launch.
+2. **A session runs and the notification fires** (M1). Start a focus session, lock the phone, wait
+   it out. The end-of-session notification arrives, and the time on return is correct. Then a
+   second run: pause, resume, reset — the remainder never drifts.
+3. **The tank looks right** (M2). Complete a session and watch a fish appear and swim. Does it read
+   as a fish? Does it hold 60fps once there are several? Force-quit and reopen — it is still there.
+4. **A fish gets sick and recovers** (M3/M4). Start a focus session, background the app for **more
+   than 8 seconds**, come back: the session abandons, a fish goes grey and sluggish and flinches.
+   Complete the next session and watch it recover. Separately confirm a Control Center swipe-down
+   and a quick lock/unlock (under 8s) do **not** trigger it.
+5. **The merge sequence lands** (M3). See the caveat below — reaching this legitimately takes
+   ~6 hours of real focus time.
+6. **Stats and Settings read correctly** (M5). Stats with a real week of data and with an empty
+   history; the five-tab bar is not crowded. Then the one M5 check nothing else can make: set
+   Reduce Motion to **off** while the iOS accessibility setting is **on**, and confirm full tank
+   motion and the full merge sequence come back.
+7. **The shop demos end to end** (M6a). Buy Golden Koi — the "Buying…" state is visible for about a
+   second, then the row pops and bursts. Buy repeatedly until you hit the 1-in-10 simulated
+   failure and confirm the error reads sensibly and the row recovers. Tap "Set active", then
+   force-quit and reopen: both the unlock and the active species survive. Tap "Restore
+   purchases" — but see the honest caveat below before reading anything into it.
+
+### Known and accepted limitations at the close of M6a
+
+- **"Restore purchases" is close to a no-op, and should not be read as working.**
+  `MockEntitlementProvider.restorePurchases` resolves with `useAppStore`'s own
+  `unlockedSpeciesIds` — it reads the same store the result is then unioned back into — so it
+  cannot add anything, ever. The only observable effects are the loading state and the alert. The
+  button exists because the *flow* is what M6a demos and the call site has to exist for M6b; the
+  reconciliation it performs only becomes real behind a provider with its own ledger. A restore
+  that "works" on your phone is evidence of nothing. The union logic itself (`syncUnlockedSpeciesIds`
+  never downgrades) is tested against a provider forced to forget a species, since the real mock
+  cannot produce that state.
+- **Nothing reconciles entitlements at launch.** `getOwnedSpeciesIds()` is never called on boot —
+  the only paths into `entitlements` are a purchase and the Restore button. Harmless now (the mock
+  *is* the store, so they cannot disagree), but at M6b the store and RevenueCat are different
+  machines, and any divergence — a lost write, a failed AsyncStorage flush, a reinstall, a second
+  device — persists silently until the user happens to find Restore. **The M6b task list needs a
+  startup `getOwnedSpeciesIds()` → `syncUnlockedSpeciesIds()` sync**, and it is not worth building
+  now against a provider where it is provably a no-op.
+- **`persist`'s AsyncStorage writes are fire-and-forget.** There is no `onError`, so a failed disk
+  write leaves the unlock in memory for the session and gone on next launch. Self-consistent under
+  the mock (the provider forgets too); a real divergence at M6b, and the same startup sync is the
+  fix.
+- **Concurrent purchases of *different* species are still allowed.** The new in-flight guard is
+  per-species, matching the per-row UI. Real IAP SDKs generally reject a second concurrent
+  purchase; whether to serialize globally is a real-provider question, not something to invent
+  against a mock.
+- **The gate is not really decidable yet, and this is the biggest thing on this list.** Buying a
+  species changes the Shop row and nothing else you can see. `activeSpeciesId` only takes effect
+  when a **new Fry hatches**, and the M3 spawn rule hatches one only when every existing fish is
+  capped — 120 XP at 1 XP/minute, so **two hours of focus per fish, and about six hours before a
+  Fry→Juvenile merge is reachable at all.** That means the two headline things you are being asked
+  to spend $99 on the strength of — the merge mechanic (MVP feature 4) and species you can buy
+  (MVP feature 8) — are both effectively unreachable in a demo session. The clean fix is a
+  debug-only affordance in Settings (grant XP / spawn a fish / cap all fish), next to the existing
+  reset action; the alternative is temporarily lowering `GROWTH.xpPerStage`, which is a
+  one-constant change but conflates "demo pacing" with "real pacing". **Needs your call.**
+- **Cross-species merging is rejected, and now it is observable.** `evaluateMerge` requires
+  same-species, which was a defensive default when there was one species (M3) and is a real
+  product question now that there are three: a user with two Koi Fry and one Tetra Fry cannot
+  merge, and the UI's species-grouped selection means they get no explanation, just an
+  un-tappable third fish. Rejecting is still defensible (the output has to carry exactly one
+  `speciesId`), but "you can only merge fish of the same species" is now a rule the app should
+  probably *say* somewhere.
+- **The Shop has no dedicated paywall screen** — the list *is* the paywall. Fine for three SKUs;
+  revisit if the catalog grows.
+- **The give-up wrinkle is half-resolved.** `stats.abandonedSessions` now *does* count a manual
+  "Give up" during a focus session (`recordManualAbandon`), and correctly does **not** count one
+  during a break — so the "LEFT EARLY" tile no longer under-reports by its own name. What is
+  unchanged is the M4 decision itself: a manual give-up still does not sicken a fish, so the
+  honest user who taps Give up is still treated better than one who just backgrounds. That was
+  always the product question; only the counter was a bug.
+- Everything else on M5's list is unchanged and still open: `settings.hapticsEnabled` has no
+  consumer, the tank's frame loop runs while other tabs are focused (M6a did not fold this in
+  either, despite M5's list calling it cheap to do so), the in-flight session is still not
+  persisted, three hardcoded colors remain outside the theme, `resetAll` re-shows onboarding, and
+  `StatsScreen` captures `now` at render.
 
 ---
 

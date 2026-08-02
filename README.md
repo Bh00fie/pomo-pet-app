@@ -6,7 +6,13 @@ the hit — that accountability loop (in the spirit of apps like Forest) is the 
 
 ## Status
 
-🏗 **M5 complete — every screen is real except the Shop.** Start/pause/resume/reset run off an
+✅ **The whole free-phase MVP (M0–M6a) is built.** Every screen is real, nothing is a placeholder,
+and every line of it was written without spending a penny on an Apple Developer account. What is
+left is not code: it is running it on a phone and deciding whether it is worth the $99. See the
+**consolidated on-device checklist** in [`docs/PLAN.md`](docs/PLAN.md) — one seven-step pass
+covering all six milestones.
+
+What that adds up to: start/pause/resume/reset run off an
 absolute-timestamp state machine (`endsAt`, never a decrementing counter), with customizable
 work/break lengths and a local notification scheduled for the end of the session. Finishing a
 focus session grows a fish, drawn procedurally in Skia — body, tail and fins are parametric paths,
@@ -24,17 +30,23 @@ all-time total and a seven-day bar chart (bucketed by *local* calendar day, so i
 DST transition and near midnight); a Settings tab with notifications, a reset-all-data action
 behind a confirm dialog, and a Reduce Motion control that is a genuine two-way override — it can
 force **full** motion even when iOS accessibility asks for reduced, not just the other way round;
-and a first-launch explainer of the core loop. See [`docs/PLAN.md`](docs/PLAN.md) for the milestone
-sequence and what's actually verified. **M6a — the shop UX against a mock provider — is the last
-MVP milestone**, and it carries the decision gate on whether to spend the $99.
+and a first-launch explainer of the core loop.
 
-Open items all need a real iPhone: the M0 gate (the project opens in App Store Expo Go), the M1
-gate (the end-of-session notification genuinely fires), the M2 gate (the tank looks right and
-stays smooth with several fish), the M3 gate (the merge sequence reads as satisfying), the M4
-gate (a sick fish reads as unwell, and real iOS `AppState` behaves as modelled) and the M5 gate
-(the new screens lay out correctly, and forcing Reduce Motion off visibly restores full motion).
-Everything machine-checkable — 218 unit tests, type-check, `expo-doctor`, iOS bundle export —
-passes.
+M6a adds the shop: an `EntitlementProvider` interface shaped after a real IAP SDK, a mock behind
+it that is genuinely async and fails one purchase in ten on purpose, two buyable species (Golden
+Koi, Indigo Betta) drawn from the same procedural system as the starter rather than as assets, a
+locked/desaturated preview treatment, an unlock animation, and a toggle for which species new fry
+hatch as. No real money is involved anywhere; swapping in RevenueCat at M6b changes one file.
+
+**Two honest caveats before the decision gate.** "Restore purchases" is close to a no-op — the
+mock reads ownership out of the same local store the result is reconciled into, so it cannot
+change anything, and the flow exists for M6b rather than for today. And at the shipped growth
+curve it takes roughly two hours of real focus to cap a fish and six before a merge is possible,
+so the merge mechanic and buyable species — two of the eight MVP features — are hard to actually
+experience in a demo. Both are written up in [`docs/PLAN.md`](docs/PLAN.md).
+
+Everything machine-checkable passes: 286 unit tests across 18 suites, type-check, `expo-doctor`
+18/18, and an iOS bundle export. Everything still open needs a real iPhone.
 
 ## Running it
 
