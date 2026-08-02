@@ -1,6 +1,6 @@
 import { Canvas } from '@shopify/react-native-skia';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring } from 'react-native-reanimated';
 
 import { durations, ParticleBurst, springs, useReduceMotion } from '@/anim';
@@ -183,49 +183,68 @@ export function ShopScreen() {
 
   return (
     <Screen>
-      <Text variant="title">Shop</Text>
-      <Text color="textMuted" style={styles.subtitle}>
-        Unlock species permanently. Tap an unlocked species to make it the one new fry hatch as.
-      </Text>
+      {/*
+        Scrollable for the same reason Settings and onboarding are: `Screen` is a fixed `flex: 1`
+        View, so anything past the viewport is clipped with nothing to scroll. The species pass
+        that added Reef Shark and Clownfish took this list from three rows to five (~77pt each),
+        which is the growth CLAUDE.md's Settings finding named ShopScreen as the next candidate
+        for. Measured rather than guessed: header + 5 rows + Restore ≈ 621pt against ≈ 761pt of
+        usable height on a 6.1" device — it still fits there — but ≈ 627pt against ≈ 618pt on an
+        SE, where "Restore purchases" is the button that goes off-screen. A sixth species overflows
+        everywhere. Inert while the content fits, so this costs nothing today.
+      */}
+      <ScrollView
+        style={styles.body}
+        contentContainerStyle={styles.bodyContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text variant="title">Shop</Text>
+        <Text color="textMuted" style={styles.subtitle}>
+          Unlock species permanently. Tap an unlocked species to make it the one new fry hatch as.
+        </Text>
 
-      <View style={styles.list}>
-        {SPECIES_ORDER.map((speciesId) => (
-          <ShopRow
-            key={speciesId}
-            speciesId={speciesId}
-            owned={entitlements.unlockedSpeciesIds.includes(speciesId)}
-            isActive={activeSpeciesId === speciesId}
-            purchaseState={purchaseStates[speciesId] ?? { status: 'idle' }}
-            reduced={reduced}
-            onLayout={(event) => handleRowLayout(speciesId, event)}
-            onBuy={() => handleBuy(speciesId)}
-            onSetActive={() => setActiveSpecies(speciesId)}
-          />
-        ))}
+        {/* The burst overlay below is `absoluteFill` *inside* this View and `rowLayoutsRef` records
+            each row's offset relative to it, so both stay in the same coordinate space the
+            ScrollView scrolls as a unit — the celebration tracks its row rather than the screen. */}
+        <View style={styles.list}>
+          {SPECIES_ORDER.map((speciesId) => (
+            <ShopRow
+              key={speciesId}
+              speciesId={speciesId}
+              owned={entitlements.unlockedSpeciesIds.includes(speciesId)}
+              isActive={activeSpeciesId === speciesId}
+              purchaseState={purchaseStates[speciesId] ?? { status: 'idle' }}
+              reduced={reduced}
+              onLayout={(event) => handleRowLayout(speciesId, event)}
+              onBuy={() => handleBuy(speciesId)}
+              onSetActive={() => setActiveSpecies(speciesId)}
+            />
+          ))}
 
-        {celebration && (
-          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-            <Canvas style={StyleSheet.absoluteFill}>
-              <ParticleBurst
-                cx={celebration.x}
-                cy={celebration.y}
-                trigger={celebration.trigger}
-                color={colors.sun}
-                count={16}
-                radius={64}
-              />
-            </Canvas>
-          </View>
-        )}
-      </View>
+          {celebration && (
+            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+              <Canvas style={StyleSheet.absoluteFill}>
+                <ParticleBurst
+                  cx={celebration.x}
+                  cy={celebration.y}
+                  trigger={celebration.trigger}
+                  color={colors.sun}
+                  count={16}
+                  radius={64}
+                />
+              </Canvas>
+            </View>
+          )}
+        </View>
 
-      <Button
-        label={restoring ? 'Restoring…' : 'Restore purchases'}
-        variant="ghost"
-        disabled={restoring}
-        onPress={handleRestore}
-        style={styles.restoreButton}
-      />
+        <Button
+          label={restoring ? 'Restoring…' : 'Restore purchases'}
+          variant="ghost"
+          disabled={restoring}
+          onPress={handleRestore}
+          style={styles.restoreButton}
+        />
+      </ScrollView>
     </Screen>
   );
 }
@@ -317,6 +336,10 @@ function ShopRow({
 }
 
 const styles = StyleSheet.create({
+  body: { flex: 1 },
+  /** Bottom padding so "Restore purchases" clears the tab bar rather than sitting under it —
+   *  same treatment as `SettingsScreen`'s scroll container. */
+  bodyContent: { paddingBottom: spacing.xxl },
   subtitle: { marginTop: spacing.xs },
   list: { marginTop: spacing.lg, gap: spacing.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },

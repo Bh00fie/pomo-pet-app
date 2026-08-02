@@ -5,9 +5,26 @@ import {
   STARTER_SPECIES_ID,
 } from '../model';
 import { buildFishGeometry } from '../geometry';
-import { STAGES } from '@/config';
+import { STAGES, type StageId } from '@/config';
 
 const REFERENCE = { bodyLength: 56, bodyHeight: 32, tailSpan: 1, dorsalFinScale: 1, pectoralFinScale: 1 };
+
+/**
+ * The literal `finScale` each original species carried at each stage **before** the
+ * dorsal/pectoral split — read off `cf513d9^:src/features/pet/model.ts`, deliberately *not*
+ * re-derived from the current file.
+ *
+ * This is what makes the equivalence claim below non-circular. Rebuilding the geometry from the
+ * species' own `params` and comparing it to `buildFishGeometry(params)` only ever proves the two
+ * fin scales equal *each other* — it passes just as happily if a later change moves both of a
+ * species' fin scales together, which is exactly the regression "the split changed nothing" is
+ * supposed to exclude. These are the real historical numbers, so drift in either direction fails.
+ */
+const PRE_SPLIT_FIN_SCALE: Record<string, Record<StageId, number>> = {
+  [STARTER_SPECIES_ID]: { fry: 0.7, juvenile: 0.9, elder: 1.1 },
+  [GOLDEN_KOI_SPECIES_ID]: { fry: 0.76, juvenile: 0.96, elder: 1.16 },
+  [INDIGO_BETTA_SPECIES_ID]: { fry: 0.95, juvenile: 1.3, elder: 1.7 },
+};
 
 describe('buildFishGeometry', () => {
   it('matches the reference proportions at scale 1', () => {
@@ -88,6 +105,10 @@ describe('buildFishGeometry', () => {
       for (const stage of STAGES) {
         const params = species.stageParams[stage];
         expect(params.dorsalFinScale).toBe(params.pectoralFinScale);
+        // …and both are still the *historical* value, not merely equal to one another. Without
+        // this pin the `toEqual` below is satisfied by any pair of matching numbers.
+        expect(params.dorsalFinScale).toBe(PRE_SPLIT_FIN_SCALE[speciesId][stage]);
+        expect(params.pectoralFinScale).toBe(PRE_SPLIT_FIN_SCALE[speciesId][stage]);
 
         const oldStyleFinScale = params.dorsalFinScale;
         const expected = buildFishGeometry({
