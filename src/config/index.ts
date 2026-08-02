@@ -48,7 +48,8 @@ export const ACCOUNTABILITY = {
 } as const;
 
 export const GROWTH = {
-  /** XP awarded per completed minute of focus. */
+  /** XP awarded per completed minute of focus. This is the whole session→reward formula for M2 —
+   *  see `src/features/pet/reward.ts`, which is the only place that reads it. */
   xpPerFocusMinute: 1,
   /** XP needed to fill a stage bar. Filling it does NOT cross a stage — merging does. */
   xpPerStage: 120,
@@ -58,3 +59,24 @@ export const GROWTH = {
 
 export const STAGES = ['fry', 'juvenile', 'elder'] as const;
 export type StageId = (typeof STAGES)[number];
+
+export const AQUARIUM = {
+  /** Inset from the tank edge fish steer within, so fins/tails don't clip the glass. */
+  tankPaddingPx: 28,
+  wander: {
+    /** px/s cruising speed range; picked once per fish from a stable per-fish seed. */
+    minSpeed: 30,
+    maxSpeed: 58,
+    /** Max heading change per second while steering toward a target — caps how sharply a fish
+     *  can turn, so direction changes read as a steer rather than a snap. */
+    turnRateMax: 3.2,
+    /** Distance to the current target at which a fish picks a new random one. */
+    retargetRadius: 20,
+    /** Frame delta is clamped to this before integrating steering, so resuming from a
+     *  backgrounded/slow frame never produces a large single-frame jump. */
+    maxFrameDtMs: 50,
+  },
+  bob: { amplitudePx: 4, speedHz: 0.8 },
+  /** Multiplier on `speed*4` driving tail-wag frequency — matches the reference canvas fish. */
+  tailWagFrequency: 4,
+} as const;

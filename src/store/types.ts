@@ -1,18 +1,7 @@
-import type { StageId } from '@/config';
-
-export type SpeciesId = string;
-
-export type FishHealth = 'healthy' | 'sick';
-
-export interface Fish {
-  id: string;
-  speciesId: SpeciesId;
-  stage: StageId;
-  /** XP accrued *within* the current stage. Never crosses a stage on its own — merging does that. */
-  xp: number;
-  bornAt: number;
-  health: FishHealth;
-}
+// `Fish` is the pet/zoo domain type (docs/PLAN.md M2) — defined once in `src/features/pet/model`
+// and re-exported here so the persisted shape and the domain model can never drift apart.
+import type { Fish, SpeciesId } from '@/features/pet/model';
+export type { Fish, FishHealth, SpeciesId } from '@/features/pet/model';
 
 export interface Settings {
   workMinutes: number;

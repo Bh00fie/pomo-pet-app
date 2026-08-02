@@ -97,7 +97,7 @@ export function FocusScreen() {
           <Text variant="label" color="textMuted">
             {timer.isCompleted ? 'SESSION COMPLETE' : 'IN SESSION'}
           </Text>
-          <Text color="textMuted">{sessionHint(timer.status)}</Text>
+          <Text color="textMuted">{sessionHint(timer.status, timer.mode)}</Text>
         </Card>
       )}
     </Screen>
@@ -111,14 +111,16 @@ function statusLabel(mode: TimerMode, status: string): string {
   return mode === 'focus' ? 'FOCUS' : 'BREAK';
 }
 
-function sessionHint(status: string): string {
+function sessionHint(status: string, mode: TimerMode): string {
   switch (status) {
     case 'running':
       return 'You can lock your phone — the timer runs on wall-clock time and a notification fires when it ends.';
     case 'paused':
       return 'Paused. Remaining time is held exactly where you left it.';
     case 'completed':
-      return 'Session finished. Rewards land in M2 — for now, take the break.';
+      return mode === 'focus'
+        ? 'Session finished. Check the Aquarium tab — your fish grew.'
+        : 'Break over. Back to focus when you are ready.';
     default:
       return 'Session ended early. Nothing was awarded.';
   }

@@ -2,6 +2,11 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 import { APP, TIMER } from '@/config';
+// Submodule imports (not the `@/features/pet` barrel) — the barrel re-exports `useSessionReward`,
+// which imports this store, and going through it here would create a module-load cycle.
+import { generateFishId } from '@/features/pet/id';
+import { STARTER_SPECIES_ID } from '@/features/pet/model';
+import { applySessionReward } from '@/features/pet/reward';
 import { SCHEMA_VERSION, migrate } from './migrations';
 import { asyncStorageJSON } from './storage';
 import type { PersistedState, Settings } from './types';
@@ -9,6 +14,10 @@ import type { PersistedState, Settings } from './types';
 interface AppActions {
   setSettings: (patch: Partial<Settings>) => void;
   completeOnboarding: () => void;
+  /** Applies one focus session's reward (docs/PLAN.md M2): grows an existing fish's XP, or
+   *  spawns a starter Fry if the user has none yet. Called by `useSessionReward` on the timer
+   *  engine's `completed` transition. */
+  awardSessionCompletion: (focusMs: number, now: number) => void;
   /** Test/dev affordance — wipes persisted state back to defaults. */
   resetAll: () => void;
 }
@@ -38,7 +47,7 @@ const initialPersisted: PersistedState = {
     focusMsByDate: {},
   },
   entitlements: {
-    unlockedSpeciesIds: ['starter'],
+    unlockedSpeciesIds: [STARTER_SPECIES_ID],
     unlockedTankIds: ['rectangular'],
   },
   onboardingCompletedAt: null,
@@ -52,6 +61,18 @@ export const useAppStore = create<AppStore>()(
 
       setSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
       completeOnboarding: () => set({ onboardingCompletedAt: Date.now() }),
+
+      awardSessionCompletion: (focusMs, now) =>
+        set((s) => {
+          const result = applySessionReward({
+            fish: s.fish,
+            focusMs,
+            now,
+            idFactory: () => generateFishId(now),
+          });
+          return { fish: result.fish };
+        }),
+
       resetAll: () => set({ ...initialPersisted }),
     }),
     {
