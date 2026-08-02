@@ -94,49 +94,82 @@ describe('getWeeklyFocus — month/year boundaries', () => {
 });
 
 describe('getWeeklyFocus — DST transitions (America/New_York, pinned in jest.config.js)', () => {
+  // The zone is pinned by `jest.config.js`, which sets it before Jest forks its workers —
+  // assigning `process.env.TZ` from in here would be silently ignored and these tests would
+  // degrade into ordinary 24h-day tests without failing. Assert it instead of assuming it.
+  // (Same guard as `src/features/streak/__tests__/streak.test.ts`, for the same M4 reason.)
   it('runs in the DST-observing zone these dates depend on', () => {
     expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe('America/New_York');
   });
 
-  it('produces exactly 7 distinct, correctly-ordered calendar days across the spring-forward week', () => {
-    // 2026-03-08 is the US spring-forward transition (a 23h local day). A window ending on it must
-    // still produce 7 distinct calendar day keys in order, not a duplicate or a skipped day from
-    // ms-based arithmetic drifting across the short day.
-    const now = new Date(2026, 2, 8, 12, 0, 0);
-    const result = getWeeklyFocus({}, now);
+  /** Ms between local midnight of two `YYYY-MM-DD` dates — asserted on directly below so a wrong
+   *  date pair cannot silently turn a DST test into a plain 24h-day test. Mirrors the helper in
+   *  the streak suite. */
+  function midnightSpanHours(fromDateStr: string, toDateStr: string): number {
+    const [fy, fm, fd] = fromDateStr.split('-').map(Number);
+    const [ty, tm, td] = toDateStr.split('-').map(Number);
+    return (new Date(ty, tm - 1, td).getTime() - new Date(fy, fm - 1, fd).getTime()) / 3_600_000;
+  }
+
+  /**
+   * These two tests must be run from a `now` that is **within an hour of local midnight on a day
+   * after the transition**, looking back *across* it. That is the only shape that discriminates:
+   * the DST shift is one hour, so from any `now` around midday a naive
+   * `new Date(now.getTime() - i * 86_400_000)` still lands on the right calendar date and the test
+   * passes against a broken implementation. Verified by mutation — swapping the field arithmetic
+   * in `stats.ts` for raw ms subtraction fails exactly these two and nothing else in this file.
+   */
+  it('spring-forward: the 23h day is still its own bucket, not skipped', () => {
+    expect(midnightSpanHours('2026-03-08', '2026-03-09')).toBe(23);
+
+    // 00:30 on March 9, the morning after the transition. Raw ms subtraction shifts every earlier
+    // bucket back an hour, which drops 2026-03-08 out of the window entirely and pulls 2026-03-02
+    // in instead — a day of the user's focus time silently vanishing from the chart.
+    const now = new Date(2026, 2, 9, 0, 30, 0);
+    const result = getWeeklyFocus({ '2026-03-08': 90 * 60_000 }, now);
     const keys = result.map((d) => d.dateKey);
+
     expect(keys).toEqual([
-      '2026-03-02',
       '2026-03-03',
       '2026-03-04',
       '2026-03-05',
       '2026-03-06',
       '2026-03-07',
       '2026-03-08',
+      '2026-03-09',
     ]);
     expect(new Set(keys).size).toBe(7);
+    expect(result.find((d) => d.dateKey === '2026-03-08')?.focusMs).toBe(90 * 60_000);
+    expect(result.reduce((sum, d) => sum + d.focusMs, 0)).toBe(90 * 60_000);
   });
 
-  it('produces exactly 7 distinct, correctly-ordered calendar days across the fall-back week', () => {
-    // 2026-11-01 is the US fall-back transition (a 25h local day).
-    const now = new Date(2026, 10, 1, 12, 0, 0);
-    const result = getWeeklyFocus({}, now);
+  it('fall-back: the 25h day appears exactly once, not twice', () => {
+    expect(midnightSpanHours('2026-11-01', '2026-11-02')).toBe(25);
+
+    // 23:30 on November 2, the night after the transition. Raw ms subtraction shifts every earlier
+    // bucket forward an hour, which emits 2026-11-01 twice and drops 2026-10-27 — the same day's
+    // focus time counted into two bars.
+    const now = new Date(2026, 10, 2, 23, 30, 0);
+    const result = getWeeklyFocus({ '2026-11-01': 30 * 60_000, '2026-10-27': 10 * 60_000 }, now);
     const keys = result.map((d) => d.dateKey);
+
     expect(keys).toEqual([
-      '2026-10-26',
       '2026-10-27',
       '2026-10-28',
       '2026-10-29',
       '2026-10-30',
       '2026-10-31',
       '2026-11-01',
+      '2026-11-02',
     ]);
     expect(new Set(keys).size).toBe(7);
+    expect(keys.filter((k) => k === '2026-11-01')).toHaveLength(1);
+    expect(result.reduce((sum, d) => sum + d.focusMs, 0)).toBe(40 * 60_000);
   });
 
   it('still attributes a session logged late at night on the spring-forward day to that day', () => {
-    // A local time of 23:30 on the short day — a UTC-instant-based bucketing scheme is exactly
-    // the kind of thing that mis-keys near a DST boundary; this stays local-field-based.
+    // The trivial i=0 bucket, kept for the `isToday`/`weekday` pairing on a transition day rather
+    // than for DST discrimination — the two tests above are what actually exercise the shift.
     const now = new Date(2026, 2, 8, 23, 30, 0);
     const result = getWeeklyFocus({ '2026-03-08': 42 }, now);
     expect(result[6]).toEqual({ dateKey: '2026-03-08', focusMs: 42, isToday: true, weekday: 0 });
