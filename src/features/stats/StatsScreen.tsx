@@ -6,8 +6,14 @@ import { colors, radius, spacing } from '@/theme';
 import { getTodayFocusMs, getWeeklyFocus } from './stats';
 
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-const BAR_MAX_HEIGHT = 64;
-const BAR_MIN_HEIGHT = 3;
+/** Floor for the chart's own height. The track grows past this to fill whatever vertical space
+ *  the screen has left over (see `weekCard`), so bar heights are a *fraction of the track*, not
+ *  an absolute pixel count — otherwise the bars would stay 64pt tall in a 300pt-tall card. */
+const BAR_MIN_TRACK_HEIGHT = 64;
+/** A zero-focus day still draws a visible stub so the day reads as "nothing", not "missing". */
+const BAR_ZERO_HEIGHT = 3;
+/** Smallest non-zero bar, as a percentage of the track, so a 2-minute day is still visible. */
+const BAR_MIN_PERCENT = 4;
 
 function formatHours(ms: number): string {
   const hours = ms / 3_600_000;
@@ -69,7 +75,10 @@ export function StatsScreen() {
         <View style={styles.bars} accessibilityRole="none">
           {week.map((day) => {
             const heightRatio = day.focusMs / weekMaxMs;
-            const barHeight = day.focusMs === 0 ? BAR_MIN_HEIGHT : Math.max(BAR_MIN_HEIGHT, heightRatio * BAR_MAX_HEIGHT);
+            const barHeight =
+              day.focusMs === 0
+                ? BAR_ZERO_HEIGHT
+                : (`${Math.max(BAR_MIN_PERCENT, heightRatio * 100)}%` as const);
             const weekday = WEEKDAY_LABELS[day.weekday];
             return (
               <View key={day.dateKey} style={styles.barColumn}>
@@ -109,17 +118,28 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   tile: { flexGrow: 1, flexBasis: '45%' },
-  weekCard: { marginTop: spacing.lg },
+  /**
+   * `flex: 1` is what makes this screen fill the device rather than stopping two-thirds of the way
+   * down. Everything here is fixed-height — four stat tiles, a chart, a counter — so on a 6.1"
+   * phone the content ran ~470pt against ~698pt of usable height and left ~230pt of dead space
+   * below the LEFT EARLY card. The 7-day chart is the one element that genuinely reads better
+   * taller, so it absorbs the slack and the counter card gets pushed to the bottom where it
+   * belongs. `Screen` does not scroll (CLAUDE.md's recurring rule), and this screen still does not
+   * need to: the chart shrinks to `BAR_MIN_TRACK_HEIGHT` before anything can be clipped.
+   */
+  weekCard: { marginTop: spacing.lg, flex: 1 },
   bars: {
+    flex: 1,
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    // `stretch`, not `flex-end`: each column has to be full height for its track to flex.
+    alignItems: 'stretch',
     justifyContent: 'space-between',
-    height: BAR_MAX_HEIGHT + spacing.xl,
+    minHeight: BAR_MIN_TRACK_HEIGHT + spacing.xl,
     marginTop: spacing.sm,
   },
   barColumn: { alignItems: 'center', gap: spacing.xs, flex: 1 },
   barTrack: {
-    height: BAR_MAX_HEIGHT,
+    flex: 1,
     width: 18,
     justifyContent: 'flex-end',
   },
