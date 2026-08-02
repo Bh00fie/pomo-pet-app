@@ -1,12 +1,14 @@
 # Project Context
 
-## Status: M3 (growth + merge) built — M4 is next
+## Status: M4 (accountability + streaks) built — M5 is next
 
 The Expo app exists on `main`, builds, has a working Pomodoro timer, and completed focus sessions
 hatch/grow procedurally drawn Skia fish that swim in the Aquarium tab. As of M3 the full core loop
 is closed: sessions grow fish, capped fish accumulate, and three same-stage fish can be tapped and
-merged into one of the next stage with a converge/burst/reveal sequence. `docs/PLAN.md` is the
-milestone sequence; M4 (accountability + streaks) is next.
+merged into one of the next stage with a converge/burst/reveal sequence. M4 adds the retention
+half: leaving a running focus session backgrounded past a grace period auto-abandons it and marks
+a fish sick, a completed session cures it, and consecutive-day streaks are tracked and shown on
+the Focus screen. `docs/PLAN.md` is the milestone sequence; M5 (stats, settings, polish) is next.
 
 ### Current repo state (2026-08-02)
 
@@ -42,8 +44,8 @@ milestone sequence; M4 (accountability + streaks) is next.
     Multiply a `withTiming` duration — or a per-frame delta — by it. Never write
     `if (useReduceMotion())`: 0.35 is truthy and the check silently inverts.
   - Motion tokens (`src/anim/motion.ts`) are the only source of durations/easings/springs.
-    `Ripple` and `ParticleBurst` are now wired into the M3 merge reveal (`MergeSequence.tsx`);
-    `springs.penalty` is still waiting on M4.
+    `Ripple` and `ParticleBurst` are wired into the M3 merge reveal (`MergeSequence.tsx`), and
+    `springs.penalty` into the M4 healthy→sick wince in `Tank.tsx`. Every token now has a consumer.
 - **Growth + merge (M3) is real.** Two rules, both pure, both in `src/features/pet/`:
   - **Spawn rule (`reward.ts`) — the user picked this one, do not change it without asking.** A
     completed session grows the *first* fish that still has room in its stage; a fresh Fry hatches
@@ -70,26 +72,101 @@ milestone sequence; M4 (accountability + streaks) is next.
     animation** — `MergeSequence` is purely a visual echo of something already persisted, so a
     kill mid-sequence loses nothing. Under Reduce Motion the sequence is skipped entirely (the
     result fish is simply already at the merge point), rather than hidden and then revealed.
+- **Overflow XP carries, it is not discarded (decided at M4 — the user's call, do not revert
+  without asking).** `distributeXp` in `reward.ts` grows the selected fish to *exactly* its cap
+  (`addXp` still clamps) and re-feeds the leftover through the same grow-or-spawn selection, so it
+  lands on the next under-cap fish or hatches a Fry. `awardedFishId` stays the *primary* target
+  even when the overflow ends up elsewhere. The recursion's base case is the spawn branch, which
+  absorbs everything left and cannot recurse again; every other step consumes ≥1 XP *and* removes
+  one fish from the under-cap set, so depth is bounded by the fish count — verified, not assumed.
+- **Accountability + streaks (M4) are real.**
+  - **The penalty decision is a timestamp delta, never a timer.** Same lesson as M1's `endsAt`.
+    `useTimer.ts`'s `AppState` listener handles `'background'` and `'active'` **only**;
+    `noteBackgrounded` stores an absolute `backgroundedAt` on `useTimerStore`, and
+    `resolveForeground` computes `now - backgroundedAt` against `ACCOUNTABILITY.backgroundGraceMs`
+    (8s, **inclusive** — exactly 8s is forgiven). **Never add a `setTimeout` to this path.**
+  - `'inactive'` has no branch in the listener at all, so a Control Center peek
+    (`active → inactive → active`) never opens an excursion. And `noteBackgrounded` refuses to
+    overwrite an already-open one, so an `inactive` blip *inside* an excursion
+    (`background → inactive → background`) still measures from the real start rather than
+    restarting the grace clock. Both directions are tested.
+  - `resolveForeground` **folds the wall clock in first**. A session whose `endsAt` passed while
+    away is a normal completion, not a penalty — see the open issue about this below.
+  - Backgrounding during a **break** is exempt via a real `timer.mode !== 'focus'` check in
+    `noteBackgrounded`, and the manual **"Give up"** button is exempt too. `useLeaveEarlyPenalty`
+    keys off `lastPenaltyToken` (a counter bumped only by the auto-abandon path) rather than
+    `status === 'abandoned'`, which both paths produce — that indirection is the whole reason
+    give-up can be exempt. Mounted **once**, at `app/_layout.tsx`, same rule as `useSessionReward`.
+  - `applyPenalty` (`src/features/pet/penalty.ts`) is pure and **reuses the reward rule's target
+    selection** — the fish that gets sick is exactly the one the session would have grown. No
+    growable fish (empty or all-capped) is a valid no-op. Recovery lives in `reward.ts`: being
+    chosen as a grow target cures a fish, at *every* link of an overflow chain.
+  - **Streaks (`src/features/streak/streak.ts`) are pure and keyed on a local `YYYY-MM-DD`
+    string** — never a UTC timestamp, never a `toISOString()` slice (that shifts the date near
+    midnight anywhere west of UTC). Day distance is measured **midnight-to-midnight and rounded**,
+    which is what absorbs a 23h/25h DST day; a raw ms division between the two *instants* would
+    not. Written in the same `set` as the fish reward so streak and stats cannot drift.
+  - Sick visuals: `HEALTH.sickSaturationMultiplier` scales the species' *own* saturation (so the
+    hue still reads as that species, just ill — not a flat recolor; `colors.sick` is now unused),
+    `HEALTH.sickTailWagMultiplier` slows the tail wag, and `Tank.tsx` plays a damped
+    `springs.penalty` wince on the healthy→sick transition, skipped under Reduce Motion.
 - `useSessionReward` is mounted **once**, at `app/_layout.tsx`, so a session finishing on any tab
   awards. It de-dupes on the timer's `endsAt` (stable per session) via a hook-local ref — that
   guard is per hook instance, so **do not mount it a second time** or every session awards twice.
-- **Tests exist and must stay green**: `npm test` (jest-expo preset), 135 tests across 12 suites.
+  Note `useTimer()` itself *is* mounted twice (root bridge + `FocusScreen`), so there are two
+  `AppState` listeners; that is safe only because `noteBackgrounded`/`resolveForeground` are
+  idempotent per excursion. Keep them that way.
+- **Tests exist and must stay green**: `npm test` (jest-expo preset), 184 tests across 14 suites.
   Note `@testing-library/react-native` v14 has an *async* API — `render` and `fireEvent` must both
   be awaited. Worklet/`SharedValue` code (`steering.ts`) is deliberately untested — there is
   nothing meaningful to assert without a native runtime; the plain-number math it composes with
-  (`geometry.ts`) is tested instead.
-- Verified independently on 2026-08-02 after the M3 build: `npm test` 135/135 (12 suites),
+  (`geometry.ts`) is tested instead. **`jest.config.js` pins `process.env.TZ` to
+  `America/New_York`** — see the M4 review note below for why that has to live there and not in a
+  test file.
+- Verified independently on 2026-08-02 after the M4 build: `npm test` 184/184 (14 suites),
   `npx tsc --noEmit` clean, `npx expo-doctor` 18/18, `npx expo export --platform ios` succeeds
-  (4.69 MB Hermes bundle; 4.67 MB at M2, 4.02 MB at M1), `expo --version` → 54.x.
+  (4.7 MB Hermes bundle; 4.69 MB at M3, 4.67 MB at M2, 4.02 MB at M1), `expo --version` → 54.x.
 - **Not verified**: anything needing the user's phone — that the app opens in App Store Expo Go
   (the M0 gate), that the scheduled end-of-session notification actually fires (the M1 gate),
-  that the tank *looks* right and holds 60fps with several fish (the M2 gate), and that the merge
-  converge/burst/reveal sequence reads as satisfying (the M3 gate). Do not mark any of them done
-  until they confirm.
+  that the tank *looks* right and holds 60fps with several fish (the M2 gate), that the merge
+  converge/burst/reveal sequence reads as satisfying (the M3 gate), and that a sick fish visibly
+  reads as unwell and the real iOS `AppState` sequence behaves as modelled (the M4 gate). Do not
+  mark any of them done until they confirm.
 
-### Open issues found in the M2/M3 reviews (2026-08-02)
+### Open issues found in the M2/M3/M4 reviews (2026-08-02)
 
 Fixed already:
+
+- **The M4 DST tests were vacuous** (M4 review). They claimed to cover spring-forward and
+  fall-back and covered neither: `process.env.TZ` assigned inside a `beforeAll` is **silently
+  ignored** — the runtime resolves its zone before any test file loads — so they ran in the
+  machine's own zone (Europe/London here), and the date pairs were the day *before* each
+  transition, which is a plain 24-hour day even in the right zone. The whole streak suite passed
+  against a deliberately-broken `Math.floor` implementation. Now the zone is pinned in
+  `jest.config.js` (which Jest loads in its parent process, before workers fork — that is the only
+  place this works), the dates are the transition days themselves (Mar 8→9 = 23h, Nov 1→2 = 25h,
+  Mar 7→9 = 47h), and each test asserts the span it depends on so it cannot silently degrade
+  again. **Rule this proves: a test that exercises an environment has to assert that environment.**
+  Verified the corrected tests do fail against `Math.floor`.
+- Two small M4 correctness additions: `applyCompletedSessionToStreak` now floors the same-day
+  branch at 1, so a completed session can never leave the streak on zero; and the grace-period
+  boundary (`elapsed === backgroundGraceMs` → forgiven) is now pinned by a test rather than only
+  by the two sides of it.
+
+Checked and **confirmed sound**, listed because they were claims worth distrusting:
+
+- **"No `SCHEMA_VERSION` bump needed" — true this time.** Verified against the M0 commit rather
+  than the current file: `abandonedSessions`, `currentStreak`, `longestStreak`,
+  `lastCompletedLocalDate` and `focusMsByDate` have been in `Stats` *and* in
+  `initialPersisted.stats` with these exact zero-value defaults since commit one, so no stored
+  payload can be missing them and `persist`'s shallow merge cannot produce an `undefined`. (The
+  M2 review caught the opposite of this, so it was re-derived from history, not taken on faith.)
+- **The break exemption is real**, not just documented: `noteBackgrounded` early-returns on
+  `timer.mode !== 'focus'`, so an excursion is never even opened during a break.
+- **The overflow recursion cannot run away.** Base case is the spawn branch, which absorbs all
+  remaining XP into one Fry and cannot recurse; every other step consumes ≥1 XP and removes one
+  fish from the under-cap set. Depth is bounded by the fish count, and a 60-fish chain is now a
+  test. Sickness is cured at *every* link, not just the first — also now a test.
 
 - **Three teardown/timing edge cases in the M3 merge reveal** (M3 review). `MergeSequence`
   unmounting before its completion timer fired never ran `onComplete`, stranding the merge result
@@ -115,14 +192,50 @@ Flagged for the user, deliberately not fixed unilaterally:
 - ~~**A user can never get a second fish, so merging is unreachable.**~~ **Resolved at M3** — you
   chose "grow any under-cap fish; spawn a new Fry only once every fish is capped", over "spawn
   every session" and "spawn every N sessions". Implemented and verified in `reward.ts`.
-- **Overflow XP is silently discarded at the stage cap** (new, M3). `addXp` clamps, so a fish at
-  110/120 completing a 25-minute session lands on 120 and the remaining 15 XP evaporates — the
-  new Fry only starts accruing on the *next* session. The chosen spawn rule is implemented
-  faithfully; this is the leftover economy question it exposes. Options: carry the remainder into
-  the freshly hatched Fry, bank it, or keep discarding it as a deliberate soft cap on how fast a
-  collection grows. Costs of the current behaviour are small (up to one session's XP per stage
-  fill) but it does mean the longest sessions are the most wasteful. **Game-economy call, not a
-  code fix — worth deciding alongside the M4 penalty rules, which also touch in-progress XP.**
+- ~~**Overflow XP is silently discarded at the stage cap.**~~ **Resolved at M4** — you chose to
+  carry the remainder. Implemented in `distributeXp` (`reward.ts`) and verified.
+- **Backgrounding for the *entire* session is not penalized — and is still fully rewarded.**
+  (New, M4. The biggest thing on this list.) `resolveForeground` folds the wall clock in *before*
+  deciding, so if the session's own `endsAt` passed while the app was away it simply `completed`:
+  full XP, streak extended, no sick fish. That is deliberate — it preserves M1's "you can lock
+  your phone, the notification fires" flow, which is the entire reason the scheduled notification
+  exists. But it inverts the incentive the feature is for: the user who leaves for 30 seconds and
+  comes back gets punished, while the user who walks away for the full 25 minutes gets the
+  maximum reward. `docs/MVP.md` feature 5 says *sustained backgrounding* forfeits growth and
+  sickens the fish, and 25 minutes is about as sustained as it gets. The two readings genuinely
+  conflict and the resolution is a product call:
+  (a) keep it — the timer is a timer, the notification flow matters more;
+  (b) penalize any excursion over the grace period regardless of whether the session ended
+  meanwhile, which kills the lock-your-phone affordance and makes the end-of-session notification
+  nearly pointless;
+  (c) something in between (a shorter allowance, a partial reward, or distinguishing a locked
+  screen from an app switch — the latter is not reachable from `AppState` alone and probably not
+  from Expo Go at all). **Needs the user's decision; do not change it unilaterally.**
+- **Force-quitting while backgrounded escapes the penalty entirely** (new, M4). `useTimerStore`
+  is transient by design (M1), so `backgroundedAt` and the in-flight session both die with the
+  process — relaunching finds an idle timer and nothing to penalize. Same root cause as the
+  already-listed "a completed session is lost if force-quit", and the same fix (persisting the
+  in-flight session); M4 just raises the stakes, because it is now a way to *avoid* a consequence
+  rather than only a way to lose a reward.
+- **A user whose fish are all capped cannot be penalized at all** (new, M4). `applyPenalty`
+  reuses the reward rule's "first fish with room" selection, so when every fish is waiting on a
+  merge there is no target and leaving early is free. Symmetric with the reward side (that user
+  earns nothing from a completed session either, they just get a new Fry) and arguably correct,
+  but it is a real late-game gap in the accountability loop. Alternatives would be sickening a
+  capped fish anyway, or the most recently grown one.
+- **The two M4 scope calls, reviewed.** *Break exempt*: sound, endorse it — stepping away is the
+  entire point of a break, and `docs/MVP.md` frames the penalty around focus sessions. *Manual
+  "Give up" exempt*: defensible on the letter of the spec (the stated trigger is "sustained
+  backgrounding", and give-up already forfeits the reward), and the `lastPenaltyToken` indirection
+  that implements it is good design. But it means the honest user who taps Give up is treated
+  better than one who just backgrounds, which is the opposite of the gradient you probably want —
+  worth a deliberate decision rather than inheriting it. Related smaller wrinkle: a manual give-up
+  does **not** increment `stats.abandonedSessions` either, so that counter under-reports by its
+  own name; left alone because it is part of the same question.
+- **The new Focus-screen copy overstates the rule.** "Stepping away for more than a few seconds
+  marks a fish sick, even if you come back before the timer ends" is accurate for the case it
+  names but implies staying away is punished, when staying away past `endsAt` is in fact rewarded
+  (see above). Whatever gets decided about the penalty rule, this string needs to match it.
 - **Reaching Elder takes 45 completed sessions.** Falls straight out of the numbers you picked
   rather than being a bug: `xpPerStage` 120 ÷ `xpPerFocusMinute` 1 = 120 min ≈ five 25-min
   sessions to cap one fish, × `fishPerMerge` 3 = 15 sessions per Juvenile, × 3 = 45 per Elder.
@@ -137,9 +250,10 @@ Flagged for the user, deliberately not fixed unilaterally:
   focused.** Expo Router keeps tab screens mounted, so the aquarium animates (and draws battery)
   while the user is on Focus. The fix is to gate `setActive` on navigation focus, but whether it
   resumes cleanly is exactly the kind of thing that needs a device — a good M5 polish item.
-- `awardSessionCompletion` updates `fish` only; `stats` (`totalFocusMs`, `completedSessions`,
-  `focusMsByDate`, streaks) is still all zeros. That is on-plan — stats land in M4/M5 — but the
-  Stats screen will read empty until then.
+- ~~`awardSessionCompletion` updates `fish` only; `stats` is still all zeros.~~ **Resolved at
+  M4** — `totalFocusMs`, `completedSessions`, `focusMsByDate` and the streak fields are all
+  written in the same `set` as the fish reward. The Stats *screen* is still a placeholder reading
+  those values; wiring it up is M5.
 - `explore/3d-aquarium` — a parallel spike, deliberately **not merged and with no PR open**.
   See "3D exploration" below.
 

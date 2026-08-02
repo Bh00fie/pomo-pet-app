@@ -195,19 +195,94 @@ build a selection the domain rule will reject.
 The remaining gate needs your phone: earn enough fish to fill a merge, tap three of them, and
 watch the converge/burst/reveal sequence land.
 
-> **Open question carried into M4 — overflow XP is discarded at the stage cap.** A fish at
-> 110/120 that completes a 25-minute session lands on 120 and the other 15 XP evaporates; the
-> new Fry only starts on the *next* session. Carrying the remainder into the new Fry (or banking
-> it) is a game-economy call, not a code fix. See CLAUDE.md.
+> ~~**Open question carried into M4 — overflow XP is discarded at the stage cap.**~~
+> **Resolved at M4** — you chose to carry the remainder rather than discard it. `applySessionReward`
+> now grows the target to exactly its cap and re-feeds the leftover through the same
+> grow-or-spawn rule, so a fish at 110/120 earning 25 XP lands on 120 and the other 15 starts a
+> new Fry. Implemented in `reward.ts` (`distributeXp`) and verified below.
 
-## M4 — Accountability + streaks
+## M4 — Accountability + streaks  [~] built and unit-tested, awaiting the on-device demo
 
-- [ ] `AppState` listener with a grace period (~5-10s) before penalizing — never penalize on
-      `inactive` (Control Center, notification shade, phone call), only sustained `background`
-- [ ] Penalty forfeits in-progress growth and marks the fish `sick` (desaturated, recovers on next
-      completed session) — **never deletes a fish**
-- [ ] Daily streak tracking, local-date based, unit-tested against DST/timezone edge cases
+- [x] `AppState` listener with a grace period before penalizing — never penalize on `inactive`
+      (Control Center, notification shade, phone call), only sustained `background`.
+      `useTimer.ts` listens for `'background'`/`'active'` *only*; `'inactive'` is ignored on both
+      sides, so a Control Center peek (`active → inactive → active`, no `background` in it) can
+      never open an excursion. `useTimerStore.noteBackgrounded` records an absolute
+      `backgroundedAt` timestamp — the same discipline as M1's `endsAt`, never a `setTimeout`
+      trusted to fire while backgrounded — and refuses to overwrite an already-open excursion, so
+      a `background → inactive → background` blip mid-excursion still measures from the real
+      start. `resolveForeground` computes the decision from `now - backgroundedAt` against
+      `ACCOUNTABILITY.backgroundGraceMs` (8s, inclusive: exactly 8s is forgiven, 8s+1ms is not)
+- [x] Penalty forfeits in-progress growth and marks the fish `sick` (desaturated, recovers on next
+      completed session) — **never deletes a fish**. `applyPenalty` (`src/features/pet/penalty.ts`)
+      is pure and reuses the reward rule's target selection, so the fish that gets sick is exactly
+      the one the session would have grown; `useLeaveEarlyPenalty`, mounted once at the app root
+      beside `useSessionReward`, applies it off a `lastPenaltyToken` counter (not
+      `status === 'abandoned'`, which a manual "Give up" also produces). Recovery is in
+      `reward.ts`: being selected as a completed session's grow target cures a fish, at every
+      link of an overflow chain, not just the first
+- [x] Daily streak tracking, local-date based, unit-tested against DST/timezone edge cases.
+      `src/features/streak/streak.ts` is pure and keyed on a `YYYY-MM-DD` **local** calendar date
+      (never a UTC timestamp or a `toISOString()` slice, which shifts the date near midnight west
+      of UTC). Day distance is measured midnight-to-midnight and rounded, so a 23h or 25h DST day
+      is still exactly one day. Written into the same `set` as the fish reward, alongside
+      `totalFocusMs` / `completedSessions` / `focusMsByDate`, so they cannot drift
+- [~] Sick fish read as sick: desaturated (`HEALTH.sickSaturationMultiplier` scales the species'
+      own saturation, so the hue is still recognizable — ill, not a different fish) and a slower
+      tail-wag (`HEALTH.sickTailWagMultiplier`), plus a damped `springs.penalty` "wince" in
+      `Tank.tsx` on the healthy→sick transition, skipped under Reduce Motion. **Whether the
+      desaturation actually reads as "your fish is unwell" is phone-only**, so this stays `[~]`
 - [ ] Demo: leave mid-session, see the pet react; complete days, see the streak fire
+
+Verified on 2026-08-02 by an independent review pass, machine-checkable parts only:
+
+- `npm test` → **184 tests, 14 suites, all passing** (135 at M3; 178 after the M4 build commit,
+  plus 6 added by this review pass)
+  - `streak.test.ts` (14) — the date math, including the DST cases described below
+  - `penalty.test.ts` (5) — target selection matches the reward rule, no-op on an empty or
+    fully-capped collection, idempotent when the target is already sick, never mutates its input
+  - `useTimerStore.test.ts` — `noteBackgrounded`/`resolveForeground`: idle and paused are not
+    tracked, a break is not tracked, an already-open excursion is not overwritten, both sides of
+    the grace boundary *and* the boundary itself, no double-penalty on repeated foreground events
+  - `reward.test.ts` — overflow carries rather than evaporating, spills into a second under-cap
+    fish before spawning, chains across capped fish, cures every fish the chain grows, and
+    conserves XP exactly over a 60-fish chain without unbounded recursion
+- `npx tsc --noEmit` → clean
+- `npx expo-doctor` → 18/18 checks passed
+- `npx expo export --platform ios` → succeeds; Hermes bundle **4.7 MB** (4.69 MB at M3)
+
+Reviewed and confirmed: the penalty decision is genuinely a timestamp delta computed on
+foreground, with no timer trusted to survive backgrounding anywhere in the path; `'inactive'`
+cannot reach `noteBackgrounded` (the listener has no branch for it) and cannot corrupt an open
+excursion (the `backgroundedAt !== null` guard); the break exemption is a real `timer.mode`
+check, not just a claim; the overflow recursion's base case is the spawn branch, which absorbs
+all remaining XP and cannot recurse further, and every other step both consumes ≥1 XP and removes
+one fish from the under-cap set, so depth is bounded by the fish count. The "no `SCHEMA_VERSION`
+bump needed" claim was checked against the M0 commit rather than taken on faith and **holds** —
+`abandonedSessions`, `currentStreak`, `longestStreak`, `lastCompletedLocalDate` and
+`focusMsByDate` have all been in `Stats` and in `initialPersisted.stats` with these exact
+zero-value defaults since commit one, so no stored payload can be missing them.
+
+Fixed by the review pass: **the DST tests were vacuous** — they were passing in the machine's own
+timezone, not a DST-observing one. `process.env.TZ` assigned inside a test is silently ignored
+(the runtime has already resolved its zone), and the chosen date pairs were the day *before* each
+transition, which is an ordinary 24-hour day even in the right zone. The whole suite passed
+against a deliberately-broken `Math.floor` implementation. The zone is now pinned in
+`jest.config.js` before Jest forks its workers, the dates are the transition days themselves
+(Mar 8→9 = 23h, Nov 1→2 = 25h, Mar 7→9 = 47h), and each test asserts the span it depends on so it
+cannot quietly degrade again. Also added: a `Math.max(1, …)` floor so a completed session can
+never leave the streak on zero, and the grace-period boundary is now pinned by a test.
+
+The remaining gate needs your phone: start a focus session, background the app for more than 8
+seconds, come back and watch a fish go grey and flinch — then complete a session and watch it
+recover, and complete sessions on consecutive days to see the streak line climb.
+
+> **Open question carried into M5 — backgrounding for the *whole* session is not penalized, and
+> is still fully rewarded.** `resolveForeground` folds the wall clock in before deciding, so a
+> session whose `endsAt` passed while the app was away completes normally. That deliberately
+> preserves M1's "lock your phone, the notification fires" flow, but it means the accountability
+> hook only bites the user who comes back *early* — walking away for the full 25 minutes is the
+> optimal strategy. See CLAUDE.md; this needs your call, not a code fix.
 
 ## M5 — Stats, settings, polish
 
