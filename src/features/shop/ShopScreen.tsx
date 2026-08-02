@@ -9,6 +9,7 @@ import { getSpecies, SPECIES_ORDER, STARTER_SPECIES_ID, type SpeciesId } from '@
 import { useAppStore } from '@/store';
 import { colors, radius, spacing } from '@/theme';
 import { Button, Card, Screen, Text } from '@/ui';
+import type { PurchaseResult } from './EntitlementProvider';
 import { mockEntitlementProvider } from './MockEntitlementProvider';
 import { SpeciesSwatch } from './SpeciesSwatch';
 
@@ -83,38 +84,33 @@ export function ShopScreen() {
     rowLayoutsRef.current[speciesId] = { x, y, width, height };
   }, []);
 
+  /** Species with a purchase currently in flight. A **ref**, not the `purchaseStates` this
+   *  renders from, because that is React state and only reflects a tap one render later — see
+   *  `handleBuy`. */
+  const inFlightRef = useRef<Set<SpeciesId>>(new Set());
+
   const handleBuy = useCallback(
     async (speciesId: SpeciesId) => {
+      // The row's `disabled={pending}` is derived from React state, so it does not exist yet for
+      // a second tap landing in the same frame as the first — both get through and both call the
+      // provider. Against the mock that is invisible (its `isOwned` check still reads false for
+      // the second call, and `unlockSpecies` is idempotent), which is exactly why it has to be
+      // closed *now*: at M6b this line calls RevenueCat's `purchasePackage`, and calling it twice
+      // for one product is a double charge, not a no-op. Same lesson as the M3 merge double-tap —
+      // **React state is not a lock, a ref is.** Keyed per species so two different rows can
+      // still be bought independently; serializing across species is a real-provider question
+      // (see docs/PLAN.md M6a), not something to invent against a mock.
+      if (inFlightRef.current.has(speciesId)) return;
+      inFlightRef.current.add(speciesId);
+
       setPurchaseStates((prev) => ({ ...prev, [speciesId]: { status: 'pending' } }));
 
+      // Only the provider call is inside the `try`. Anything after it is local bookkeeping, and
+      // sweeping that into the same `catch` would report a purchase that *succeeded and was
+      // applied* as a failure — the one lie this screen must never tell.
+      let result: PurchaseResult;
       try {
-        const result = await mockEntitlementProvider.purchaseSpecies(speciesId);
-
-        if (result.ok) {
-          // The provider only ever reports what happened — applying a successful purchase to
-          // `entitlements` is this call site's job, exactly as it will be again for the real
-          // provider at M6b (see `MockEntitlementProvider`'s doc comment). Deliberately the first
-          // statement after a successful result and *not* guarded by an is-mounted check: a store
-          // write must survive this screen unmounting mid-await (a tab switch during the ~1s
-          // round trip), or a purchase the provider considers made would leave no trace locally.
-          // The `setState` calls below are the ones that no-op after unmount, which is harmless.
-          unlockSpecies(speciesId);
-          setPurchaseStates((prev) => ({ ...prev, [speciesId]: { status: 'idle' } }));
-
-          if (!reduced) {
-            const layout = rowLayoutsRef.current[speciesId];
-            setCelebration({
-              x: (layout?.x ?? 0) + (layout?.width ?? 0) / 2,
-              y: (layout?.y ?? 0) + (layout?.height ?? 0) / 2,
-              trigger: Date.now(),
-            });
-          }
-        } else {
-          setPurchaseStates((prev) => ({
-            ...prev,
-            [speciesId]: { status: 'error', message: purchaseErrorMessage(result.error) },
-          }));
-        }
+        result = await mockEntitlementProvider.purchaseSpecies(speciesId);
       } catch {
         // `EntitlementProvider.purchaseSpecies` is documented to resolve rather than reject, and
         // the mock honours that — but a *rejection* is the one outcome that would otherwise leave
@@ -125,11 +121,51 @@ export function ShopScreen() {
           ...prev,
           [speciesId]: { status: 'error', message: purchaseErrorMessage(undefined) },
         }));
+        return;
+      } finally {
+        inFlightRef.current.delete(speciesId);
+      }
+
+      if (!result.ok) {
+        setPurchaseStates((prev) => ({
+          ...prev,
+          [speciesId]: { status: 'error', message: purchaseErrorMessage(result.error) },
+        }));
+        return;
+      }
+
+      // The provider only ever reports what happened — applying a successful purchase to
+      // `entitlements` is this call site's job, exactly as it will be again for the real provider
+      // at M6b (see `MockEntitlementProvider`'s doc comment). Deliberately the first statement
+      // after a successful result and *not* guarded by an is-mounted check: a store write must
+      // survive this screen unmounting mid-await (a tab switch during the ~1s round trip), or a
+      // purchase the provider considers made would leave no trace locally. The `setState` calls
+      // below are the ones that no-op after unmount, which is harmless.
+      unlockSpecies(speciesId);
+      setPurchaseStates((prev) => ({ ...prev, [speciesId]: { status: 'idle' } }));
+
+      if (!reduced) {
+        const layout = rowLayoutsRef.current[speciesId];
+        setCelebration({
+          x: (layout?.x ?? 0) + (layout?.width ?? 0) / 2,
+          y: (layout?.y ?? 0) + (layout?.height ?? 0) / 2,
+          trigger: Date.now(),
+        });
       }
     },
     [unlockSpecies, reduced],
   );
 
+  /**
+   * **Against the mock this is very close to a no-op, and that is worth being clear about.**
+   * `MockEntitlementProvider.restorePurchases` resolves with `useAppStore`'s own
+   * `unlockedSpeciesIds` — it reads the same store this then writes back — so the union in
+   * `syncUnlockedSpeciesIds` can never add anything, and the only observable effects are the
+   * loading state and the alert. The button is here because the *flow* is what M6a demos and the
+   * call site has to already exist for M6b; the reconciliation it performs only becomes real once
+   * a provider with its own ledger (RevenueCat) is behind the interface. Do not read a passing
+   * on-device restore as evidence that restore works.
+   */
   const handleRestore = useCallback(async () => {
     setRestoring(true);
     try {
@@ -245,7 +281,11 @@ function ShopRow({
                   ? 'Unlocked'
                   : (price ?? 'Not available yet')}
             </Text>
-            {purchaseState.status === 'error' && (
+            {/* Suppressed once the species is owned: a row reading "Unlocked" must never also be
+                showing "The purchase failed." Reachable whenever a later attempt succeeds while
+                an earlier one's error is still on screen — two taps racing, or a restore landing
+                between them. */}
+            {!owned && purchaseState.status === 'error' && (
               <Text variant="caption" color="danger">
                 {purchaseState.message}
               </Text>
