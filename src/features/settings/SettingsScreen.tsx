@@ -22,9 +22,8 @@ export function SettingsScreen() {
   const settings = useAppStore(selectSettings);
   const setSettings = useAppStore((s) => s.setSettings);
   const resetAll = useAppStore((s) => s.resetAll);
-  const debugGrantXp = useAppStore((s) => s.debugGrantXp);
-  const debugCapAllFish = useAppStore((s) => s.debugCapAllFish);
-  const debugSpawnFish = useAppStore((s) => s.debugSpawnFish);
+  const debugHatchFry = useAppStore((s) => s.debugHatchFry);
+  const debugHatchJuvenile = useAppStore((s) => s.debugHatchJuvenile);
   // `selectSpawnSpeciesId`, not `settings.activeSpeciesId` — the store re-validates the active
   // species against `entitlements.unlockedSpeciesIds` before spawning, so reading the raw setting
   // here would let the button promise a Golden Koi and hand over a starter Tetra.
@@ -119,67 +118,40 @@ export function SettingsScreen() {
 
         {/*
           TODO: remove or gate before EAS build submission. Debug-only affordance added post-M6a
-          review — real pacing (`GROWTH.xpPerStage`/`xpPerFocusMinute`) makes merge and a newly
-          bought species invisible in a normal testing session, so this fast-forwards through the
-          exact same store actions/pure logic the real reward flow uses (see `useAppStore.ts`'s
-          `debugGrantXp`/`debugCapAllFish`/`debugSpawnFish`) rather than faking any state. Styled
-          distinctly (dashed amber border) on purpose — this is not a normal user-facing feature.
+          review, updated for the reward rearchitecture that replaced XP accumulation with a
+          hatch-on-completion model (see CLAUDE.md): merge and a newly bought species are
+          otherwise invisible in a normal testing session, so these buttons call straight into the
+          same hatch primitive (`hatchFish` in `reward.ts`) a real completed session uses — never a
+          simulation of it. Styled distinctly (dashed amber border) on purpose — this is not a
+          normal user-facing feature.
         */}
         <Card style={[styles.section, styles.debugSection]}>
           <Text variant="label" color="sun">
             ⚠ DEBUG — TESTING ONLY, NOT FOR SHIP
           </Text>
           <Text color="textMuted" style={styles.hint}>
-            Fast-forwards the real reward/merge/spawn logic so you can reach merge and see a bought
-            species without hours of real focus time. Same store actions the app itself uses — not
-            a simulation.
+            Hatches fish through the exact same store action a completed focus session uses, so
+            you can reach merge and see species variety without hours of real focus time.
           </Text>
 
-          <Text variant="label" color="textMuted" style={styles.hint}>
-            GRANT XP (current growth-target fish)
-          </Text>
-          <View style={styles.debugRow}>
-            <Button
-              label="+120 XP"
-              variant="secondary"
-              style={styles.debugButton}
-              onPress={() => debugGrantXp(120, Date.now())}
-            />
-            <Button
-              label="+360 XP"
-              variant="secondary"
-              style={styles.debugButton}
-              onPress={() => debugGrantXp(360, Date.now())}
-            />
-            <Button
-              label="+1000 XP"
-              variant="secondary"
-              style={styles.debugButton}
-              onPress={() => debugGrantXp(1000, Date.now())}
-            />
-          </View>
-          {/*
-            Says "up to one new fish" rather than implying more, because that is what the real
-            rule does: `distributeXp`'s spawn branch is its base case and absorbs *all* remaining
-            XP into a single Fry, where `addXp` clamps it to one stage cap. +1000 XP with an empty
-            tank is one capped Fry, not eight. Reaching three fish is Spawn ×3, then Cap all.
-          */}
+          <Button
+            label={`Hatch a ${spawnSpeciesName} Fry`}
+            variant="secondary"
+            onPress={() => debugHatchFry(Date.now())}
+          />
           <Text color="textMuted" style={styles.hint}>
-            Grants XP through the real reward rule: it fills the first fish with room, carries the
-            overflow to the next, and once every fish is capped hatches up to one new fry with
-            whatever is left.
+            Same as a short real session. Press three times for a mergeable trio.
           </Text>
 
           <Button
-            label="Cap all fish (max XP)"
+            label="Hatch a Juvenile (random species)"
             variant="secondary"
-            onPress={() => debugCapAllFish()}
+            onPress={() => debugHatchJuvenile(Date.now())}
           />
-          <Button
-            label={`Spawn a ${spawnSpeciesName} fry`}
-            variant="secondary"
-            onPress={() => debugSpawnFish(Date.now())}
-          />
+          <Text color="textMuted" style={styles.hint}>
+            Same as a long real session: one Juvenile of a species drawn at random from everything
+            you own.
+          </Text>
         </Card>
       </ScrollView>
     </Screen>
@@ -215,6 +187,4 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     backgroundColor: 'rgba(255,209,102,0.06)',
   },
-  debugRow: { flexDirection: 'row', gap: spacing.xs },
-  debugButton: { flex: 1, paddingHorizontal: spacing.sm },
 });
