@@ -85,7 +85,7 @@ milestone**, and it carries the $99 decision gate.
     feature 4 only says "N same-stage fish". Species is added because the merge output has to
     carry exactly one `speciesId` and there is no defined answer for which one when the inputs
     differ — rejecting beats inventing a rule. **No longer unobservable: M6a shipped three
-    species and did *not* revisit this.** See the M6a flag below — it is now a live product
+    species and did *not* revisit this, and the post-M6a pass took it to five.** See the M6a flag below — it is now a live product
     question, not a defensive default with no consequences.
   - UI: `Tank.tsx` owns tap-selection (`FishTapTarget` overlays that track each fish's live
     Reanimated position, so selection costs no re-renders) and exposes `mergeSelected` via ref;
@@ -227,7 +227,7 @@ milestone**, and it carries the $99 decision gate.
     pop reuses `springs.celebrate` from the M3 merge reveal. Both skipped under Reduce Motion.
   - **Cross-species merging is still rejected, and it is observable now.** M3's note said "revisit
     at M6a, when the shop ships more species" — this is that moment, and it was *not* revisited.
-    Three species exist; a user with two Koi Fry and one Tetra Fry simply cannot merge and gets no
+    Five species exist now; a user with two Koi Fry and one Tetra Fry simply cannot merge and gets no
     explanation. Still defensible (the merge output carries one `speciesId`), but the rule should
     probably be stated in the UI. Product call, flagged not fixed.
 - **The debug panel (post-M6a, the user's call at the gate) is real — and it is a shortcut through
@@ -257,13 +257,52 @@ milestone**, and it carries the $99 decision gate.
     Three fish is Spawn ×3 then Cap all.
   - **`TODO: remove or gate before EAS build submission` is on both the JSX and the store action
     block.** Hard M6b/M7 blocker. Do not let it ship.
+- **The post-M6a species pass (Reef Shark + Clownfish) is real, and its lasting value is three
+  extension points on `StageVisualParams`, not the two SKUs.** Not a milestone — a content pass
+  that tested whether "a species is a parameter record, not an asset" survives a species that is
+  *not* another rounder fish in a new hue. It does, after these three additions. **Build the
+  pending stingray on these rather than re-deriving them.**
+  - **`finScale` is now `dorsalFinScale` + `pectoralFinScale`.** One shared multiplier could only
+    scale a species' fins together, so "large dorsal, modest pectorals" was inexpressible. **Every
+    pre-split species carries both fields set to its old `finScale`**, so Coral Tetra / Golden Koi
+    / Indigo Betta render identically. Verified against commit `cf513d9^` itself, not against the
+    claim — and the nine historical values are now **pinned as literals** in `geometry.test.ts`
+    (`PRE_SPLIT_FIN_SCALE`), because the original equivalence test rebuilt geometry from the
+    species' *own* params through the *new* builder and so only proved the two fin scales equal
+    each other. Moving both of a species' scales together passed it. **Same class of lesson as the
+    M4/M5 vacuous DST tests: an equivalence test whose two sides come from the same source proves
+    nothing — pin the other side to a value the code cannot re-derive.**
+  - **`tailShape?: 'rounded' | 'crescent'`** — omitted runs the pre-existing `buildRoundedTail`
+    unchanged; `buildCrescentTail` is purely additive and is a genuinely different control-point
+    set (long pointed upper lobe, short lower lobe, deep concave notch), not the same math renamed.
+    Hinge, wag transform and draw order are shared.
+  - **`pattern?: 'stripes'` → `FishGeometry.stripes: StripeBand[]`**, empty for everything else.
+    **`Fish.tsx`/`SpeciesSwatch.tsx` build the body-oval clip path only when `stripes.length > 0`
+    and render nothing otherwise — keep that shape.** A patternless species allocates no `SkPath`
+    and mounts no `Group`/clip at all, rather than running the stripe code over an empty array.
+    Bands are fractions of `bodyRadiusX`, so they scale and stay aligned across all three stages
+    for free, and the clip is the *same oval the body is drawn from*, so a band cannot leak past
+    the silhouette at any stage. **`buildStripeBands` is deliberately not a pattern system** — a
+    second pattern is a second function like it, not a new knob.
+  - **Reef Shark ($4.49)**: length-to-height 2.43→2.71 (vs ~1.5–1.8 everywhere else), dorsal
+    1.6/pectoral 0.55 → 2.3/0.75, crescent tail, hue 205 at saturation 14. **Clownfish ($3.99)**:
+    hue 22, saturation 90, chubbier ~1.45–1.5 body with small fins, stripes doing the work.
+  - **Nothing species-count-specific needed changing, and this was read rather than trusted.**
+    `ShopScreen` maps over `SPECIES_ORDER`; `priceLabel` already degrades a priceless id to an
+    un-buyable row; `model.test.ts` already pinned that every non-starter id has a price; and
+    `merge.test.ts`'s cross-pair `it.each` is driven off `SPECIES_ORDER`, so it went from 6 ordered
+    pairs to 20 and 3 same-species happy paths to 5 by itself. **That is the payoff for writing
+    those off the array at M6a — keep doing it.**
+  - **Two extra sellable SKUs, a new tail silhouette and a pattern renderer cost 0 KB of bundle**
+    (4.73 MB before and after). The marginal-cost-per-SKU argument for staying 2D, demonstrated a
+    second time and this time with real shape variety rather than recolors.
 - `useSessionReward` is mounted **once**, at `app/_layout.tsx`, so a session finishing on any tab
   awards. It de-dupes on the timer's `endsAt` (stable per session) via a hook-local ref — that
   guard is per hook instance, so **do not mount it a second time** or every session awards twice.
   Note `useTimer()` itself *is* mounted twice (root bridge + `FocusScreen`), so there are two
   `AppState` listeners; that is safe only because `noteBackgrounded`/`resolveForeground` are
   idempotent per excursion. Keep them that way.
-- **Tests exist and must stay green**: `npm test` (jest-expo preset), 308 tests across 19 suites.
+- **Tests exist and must stay green**: `npm test` (jest-expo preset), 346 tests across 19 suites.
   Note `@testing-library/react-native` v14 has an *async* API — `render`, `renderHook` and
   `fireEvent` must all be awaited. **One exception, learned at M6a:** `fireEvent.press` returns
   whatever the handler returns, so awaiting it on an `async` `onPress` blocks until the *whole*
@@ -275,12 +314,13 @@ milestone**, and it carries the $99 decision gate.
   it composes with (`geometry.ts`) is tested instead. **`jest.config.js` pins `process.env.TZ` to
   `America/New_York`** — see the M4 review note below for why that has to live there and not in a
   test file.
-- Verified independently on 2026-08-02, twice — after the M6a build/review (`npm test` 286/286,
-  18 suites, 4.72 MB) and again after the debug panel and its review: **`npm test` 308/308
-  (19 suites), `npx tsc --noEmit` clean, `npx expo-doctor` 18/18, `npx expo export --platform ios`
-  succeeds (4.73 MB Hermes bundle**; 4.71 MB at M5, 4.7 at M4, 4.69 at M3, 4.67 at M2, 4.02 at M1).
+- Verified independently on 2026-08-02, three times — after the M6a build/review (`npm test`
+  286/286, 18 suites, 4.72 MB), after the debug panel and its review (308/308, 4.73 MB), and again
+  after the Reef Shark/Clownfish species pass and its review: **`npm test` 346/346 (19 suites),
+  `npx tsc --noEmit` clean, `npx expo-doctor` 18/18, `npx expo export --platform ios` succeeds
+  (4.73 MB Hermes bundle**; 4.71 MB at M5, 4.7 at M4, 4.69 at M3, 4.67 at M2, 4.02 at M1).
   M6a cost ~10 KB — a whole shop, two species and a Skia swatch renderer, with no new dependency —
-  and the debug panel another ~10 KB.
+  the debug panel another ~10 KB, and the species pass **nothing measurable at all**.
 - **Not verified**: anything needing the user's phone, which is now *every remaining MVP item*.
   `docs/PLAN.md` holds the **consolidated eight-step on-device checklist** covering all six
   milestones in one pass — use that rather than the six scattered per-milestone gates. In short:
@@ -298,6 +338,23 @@ milestone**, and it carries the $99 decision gate.
 
 Fixed already:
 
+- **`ShopScreen` could not scroll either, and the species pass grew its list 67%** (species-pass
+  review). The debug-panel finding below ends with "`ShopScreen` and `StatsScreen` are the next
+  candidates if they gain content" — `ShopScreen` then gained two of five rows. Measured, not
+  guessed: header + 5 rows (~77pt each) + Restore ≈ 621pt against ≈ 761pt of usable height on a
+  6.1" device, so it still fits *there*, but ≈ 627pt against ≈ 618pt on an SE, where "Restore
+  purchases" is the control that goes off-screen. A sixth species overflows everywhere. Fixed with
+  the same `ScrollView` treatment Settings and onboarding use; inert while the content fits. The
+  burst overlay is still `absoluteFill` *inside* the list `View` that `rowLayoutsRef` measures
+  against, so the celebration still tracks its row. **Third screen to hit this — `StatsScreen` is
+  now the only one left un-opted-in.**
+- **The fin-split equivalence test was near-circular** (species-pass review; the one real test bug
+  in that commit). It compared `buildFishGeometry(params)` against a rebuild from those same
+  `params`, both through the *new* builder, so it only ever proved a species' two fin scales equal
+  each other — moving both of Coral Tetra's Fry scales from 0.7 to 0.8 **together** passed it. Now
+  pinned to the nine literal pre-split values read off `cf513d9^`, and mutation-checked in both
+  directions. The underlying claim was true (the historical values do match, verified from
+  history); the test just was not what proved it.
 - **The Settings screen could not scroll, and the debug panel overflowed it** (debug-panel review;
   the one real bug in that commit). `Screen` is a fixed `flex: 1` View with no scroll. Three cards
   fitted; the debug card adds ~340pt against ~694pt of usable height on a 6.1" phone, so its own
@@ -375,6 +432,33 @@ Fixed already:
 
 Checked and **confirmed sound**, listed because they were claims worth distrusting:
 
+- **The three original species really do render identically after the fin split** (species-pass
+  review). Checked against `cf513d9^:src/features/pet/model.ts`, not against the test: all nine
+  historical `finScale` values (Tetra 0.7/0.9/1.1, Koi 0.76/0.96/1.16, Betta 0.95/1.3/1.7) are
+  exactly what both new fields carry, and `bodyLength`/`bodyHeight`/`tailSpan` are untouched.
+  `tailShape` and `pattern` are genuinely **absent** on all three, not present-but-defaulted.
+- **The crescent tail is a real shape, not a rename** (species-pass review). Read the control
+  points: `buildCrescentTail` reaches (-34,-7) and (-30,9) with a cp pulled back to x=-13 between
+  them — a deep concave notch — against `buildRoundedTail`'s (-25,±4) with a cp at x=-17, which is
+  nearly flat. Different silhouette family, same hinge and wag.
+- **The stripe clip cannot leak or drift across stages** (species-pass review — the most novel
+  piece, so it was traced rather than compiled). The clip path is the *same* oval, at the same
+  body-local origin, that the body `Oval` is drawn from, and the stripe `Group` is nested inside
+  the sprite's own transform group — so clip and body share one coordinate space by construction,
+  at any stage and any tank position. Band geometry is entirely fractions of `bodyRadiusX`
+  (centers at -0.5/0.02/0.56, width 0.26, edge 0.07), so the widest band spans -0.70rx…-0.30rx and
+  the rightmost 0.36rx…0.76rx — inside ±rx before the clip even applies, and scale-invariant.
+  Vertically the rects deliberately over-run to ±1.1·ry and are cut by the clip.
+- **A patternless species really does take the cheaper path** (species-pass review). `bodyClipPath`
+  early-returns `null` before allocating an `SkPath`, and `{bodyClipPath && …}` means no `Group`,
+  no clip and no `.map` runs at all — it is not the stripe code drawing zero bands.
+- **`ShopScreen` genuinely needed no changes** (species-pass review). Read it: it maps over
+  `SPECIES_ORDER` and derives price/owned/active/swatch per id. `priceLabel` already returns `null`
+  for an unpriced id and the row degrades to a disabled "Unavailable" button rather than crashing.
+- **The `SPECIES_ORDER`-driven tests really do scale** (species-pass review). `merge.test.ts`'s
+  cross-pair `it.each` is `SPECIES_ORDER.flatMap(...)`, so 3 species gave 6 ordered pairs and 5
+  give 20; the same-species happy path went 3 → 5. `model.test.ts`'s price and distinct-hue checks
+  are likewise array-driven. That is most of the 308 → 346 delta, and it is automatic.
 - **The debug panel really does route through the real logic** (debug-panel review). Checked the
   import, not the comment: `useAppStore.ts` imports `distributeXp` from `@/features/pet/reward` —
   the same module `applySessionReward` lives in, which now calls the *exported* function rather
@@ -459,6 +543,32 @@ Checked and **confirmed sound**, listed because they were claims worth distrusti
 
 Flagged for the user, deliberately not fixed unilaterally:
 
+- **`SpeciesSwatch` clips every species' tail, and the Reef Shark can least afford it** (new,
+  species-pass review; **pre-existing since M6a**, which is why it was not changed unilaterally).
+  `scale = (size * 0.42) / bodyRadiusX` fits the *body* into 84% of a 44pt canvas, leaving ~3.5pt
+  per side, while a tail needs ~19pt past its hinge. Coral Tetra's tail already renders ~15pt off
+  the left edge; Indigo Betta's ~27pt. It matters more now because the shark's whole identity is
+  its crescent tail and big dorsal, so its $4.49 shop preview is close to a plain grey oval — the
+  shop is selling shape variety with a swatch that hides it. Fix is to fit the species' **full**
+  geometry bounds rather than `bodyRadiusX`, which re-frames all five swatches; a visual call to
+  make while looking at a screen, ideally in the same sitting as the on-device gates.
+- **The Reef Shark's dorsal fin sweeps forward to the tip of its nose at Elder** (new,
+  species-pass review). `point()` scales a fin's *offset from its hinge*, not just its size, so
+  `dorsalFinScale: 2.3` puts the dorsal's reference endpoint at body-local x ≈ 37.9 against a body
+  radius of 38. Geometrically consistent and within the system, but at that magnitude it likely
+  reads as a forward-leaning sail rather than a dorsal. Judge on the phone; the fix is either a
+  lower scale or splitting position from size in `point()` — the latter is the more general
+  extension point if the stingray needs it.
+- **Coral Tetra (hue 12) and Clownfish (hue 22) are 10° apart** (new, species-pass review).
+  `model.test.ts`'s "every species has a distinct hue, so the shop and tank never show two
+  look-alikes" passes on strict inequality, but both are coral-orange. The stripes and the body
+  ratio are meant to carry the distinction — which is the pass's whole thesis — so this is a
+  specific thing to check on the phone at tank scale, not a bug.
+- **`Fish.tsx` still has no component test** (new, species-pass review). The stripe clip path is
+  exercised at mount only indirectly, via `ShopScreen.test.tsx`'s `SpeciesSwatch` (its Skia stub
+  now includes `Rect` and `addOval`, so all five rows really do build). The tank sprite itself is
+  untested — a pre-existing gap, but the stripe overlay is the first non-trivial *composition* in
+  it, as opposed to numbers `geometry.test.ts` already covers.
 - ~~**THE BIG ONE AT THE GATE: the two features you're deciding $99 on can't be demoed**~~
   **Resolved** — the user chose the debug-only affordance in Settings over retuning `GROWTH`, and
   it is built and reviewed (see the M6a debug-panel notes above). Merge and a bought species are
@@ -485,8 +595,8 @@ Flagged for the user, deliberately not fixed unilaterally:
   rather than quietly ticked: there is no second provider to toggle to until M6b, so it would
   select between the mock and nothing. Endorsed. Noted because the *useful* dev affordance turns
   out to be the XP grant above, not a provider switch — **and that one now exists.**
-- **Cross-species merging: M3 said "revisit at M6a" and M6a did not** (new, M6a). Three species
-  now exist, so `evaluateMerge`'s same-species requirement is observable — two Koi Fry and one
+- **Cross-species merging: M3 said "revisit at M6a" and M6a did not** (new, M6a; **five species
+  now, after the species pass**), so `evaluateMerge`'s same-species requirement is observable — two Koi Fry and one
   Tetra Fry cannot merge, and the species-grouped tap selection means the user gets no explanation,
   just a fish that will not select. Still defensible (the output carries exactly one `speciesId`),
   but the rule should probably be stated in the UI, or the shop should warn that species do not
@@ -614,6 +724,14 @@ Indigo Betta were each added as a parameter record plus per-stage geometry — a
 no assets, and `SpeciesSwatch` renders their shop previews from the *same* builder as the tank.
 That is the marginal-cost-per-SKU argument demonstrated rather than predicted. Still the user's
 call to make at the gate, but the evidence moved one way.
+
+**The post-M6a species pass moved it further, and answered the obvious objection.** The fair
+counter to the M6a evidence was that Koi and Betta are recolors of one silhouette, so of course
+they were cheap — real shape variety is where a 2D parameter system would start costing what a 3D
+asset does. It did not: Reef Shark (elongated body, crescent tail, oversized dorsal) and Clownfish
+(stripe pattern) needed three small extension points on `StageVisualParams` and **zero measurable
+bundle** (4.73 MB before and after). A modelled, rigged 3D shark and clownfish are days each. The
+still-pending stingray is the next test of this and should reuse those extension points.
 
 ### Visual references
 

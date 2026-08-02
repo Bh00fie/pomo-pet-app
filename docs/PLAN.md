@@ -729,8 +729,9 @@ yourself fish through them would only prove the debug button works.
   un-tappable third fish. Rejecting is still defensible (the output has to carry exactly one
   `speciesId`), but "you can only merge fish of the same species" is now a rule the app should
   probably *say* somewhere.
-- **The Shop has no dedicated paywall screen** — the list *is* the paywall. Fine for three SKUs;
-  revisit if the catalog grows.
+- **The Shop has no dedicated paywall screen** — the list *is* the paywall. Fine for five SKUs
+  (four sellable); revisit if the catalog grows. The post-M6a species pass is the first time the
+  list needed a `ScrollView` to fit, which is the early signal that it will.
 - **The give-up wrinkle is half-resolved.** `stats.abandonedSessions` now *does* count a manual
   "Give up" during a focus session (`recordManualAbandon`), and correctly does **not** count one
   during a break — so the "LEFT EARLY" tile no longer under-reports by its own name. What is
@@ -742,6 +743,116 @@ yourself fish through them would only prove the debug button works.
   either, despite M5's list calling it cheap to do so), the in-flight session is still not
   persisted, three hardcoded colors remain outside the theme, `resetAll` re-shows onboarding, and
   `StatsScreen` captures `now` at render.
+
+---
+
+## Post-M6a species pass — Reef Shark + Clownfish, and three reusable extension points  [~] built, reviewed
+
+Not a milestone. A content pass on top of M6a that answers the question M6a's own notes left open:
+whether the "a new species is a parameter record, not an asset" claim survives a species that is
+**not** just another rounder fish in a different hue. It does — but only after adding three small
+extension points to `StageVisualParams`, which are the reusable part of this work and the
+groundwork the **still-pending stingray** species should be built on rather than re-deriving.
+
+### The three extension points (this is the part that generalizes)
+
+1. **`finScale` split into `dorsalFinScale` + `pectoralFinScale`.** One shared multiplier could
+   only ever scale a species' fins together, so "large dorsal, modest pectorals" — the single most
+   recognizable silhouette cue on a shark — was inexpressible. **Every species that predates the
+   split carries both fields set to its old `finScale` value**, so nothing about Coral Tetra,
+   Golden Koi or Indigo Betta changed. Verified against `cf513d9^` itself rather than against the
+   claim: the nine historical values are now pinned as literals in `geometry.test.ts`
+   (`PRE_SPLIT_FIN_SCALE`), because the equivalence test alone only proved the two fin scales
+   equal *each other* and would have passed just as happily if both moved together.
+2. **`tailShape?: 'rounded' | 'crescent'`.** Omitted means the pre-existing `buildRoundedTail`
+   runs unchanged — the new `buildCrescentTail` is purely additive, a genuinely different set of
+   Bézier control points (a long pointed upper lobe, a shorter lower one, and a deep concave notch
+   between them) rather than the same math renamed. Nothing else about the fin — hinge, wag
+   transform, draw order — differs between the two.
+3. **`pattern?: 'stripes'` → `FishGeometry.stripes: StripeBand[]`.** Empty array for every species
+   without a pattern. `Fish.tsx` and `SpeciesSwatch.tsx` build a body-oval clip path **only** when
+   `stripes.length > 0` and render nothing at all otherwise, so a plain species takes a strictly
+   cheaper path — no `Group`, no clip, no allocated `SkPath` — rather than running the stripe code
+   over an empty array. Bands are positioned and sized as fractions of `bodyRadiusX`, so they
+   scale and stay aligned across Fry/Juvenile/Elder for free, and the clip is the same oval the
+   body is drawn from, so a band cannot leak past the silhouette at any stage.
+
+**Deliberately not built: a general pattern system.** `buildStripeBands` is one function with a
+fixed band count and spacing. A second pattern is a second function like it, not a new knob.
+
+### The two species
+
+- [x] **Reef Shark ($4.49)** — elongated torpedo body (length-to-height 2.43 → 2.71 across the
+      three stages, against ~1.5–1.8 for every other species), `dorsalFinScale` well above
+      `pectoralFinScale` at every stage (1.6/0.55 → 2.3/0.75), `tailShape: 'crescent'`, and the
+      catalog's coolest low-saturation hue (205, saturation 14). The first species whose *shape*
+      rather than its color is the thing you notice.
+- [x] **Clownfish ($3.99)** — vivid orange (hue 22, saturation 90), a deliberately chubbier body
+      (~1.45–1.5) with small fins on both axes, and the app's first `pattern: 'stripes'`. The
+      silhouette stays close to the base fish on purpose: the pattern is what differentiates it.
+- [x] Prices in `SHOP.speciesPriceUsd` alongside the existing $1.99/$2.99. No lookup changes were
+      needed — `priceLabel` already degrades a priceless id to an un-buyable row, and
+      `model.test.ts` already pins that every non-starter id in `SPECIES` has a price, so both new
+      ids were covered the moment they were added.
+- [x] **`ShopScreen.tsx` genuinely needed no species-count changes** — confirmed by reading it, not
+      by trusting the claim: it maps over `SPECIES_ORDER` and every per-row concern (price, owned,
+      active, swatch) is derived per id.
+- [x] **Same-species merging is untouched.** `merge.test.ts`'s cross-pair `it.each` is driven off
+      `SPECIES_ORDER`, so it grew from 6 ordered pairs to 20 and from 3 same-species happy paths to
+      5 automatically — the two new species were covered the day they shipped, which is exactly why
+      that test was written off the array at M6a. Explicit shark-vs-each-existing-species and
+      clownfish-vs-each-existing-species cases were added on top.
+
+Verified independently on 2026-08-02: `npm test` → **346 tests, 19 suites, all passing** (308 after
+the debug panel); `npx tsc --noEmit` clean; `npx expo-doctor` 18/18; `npx expo export --platform
+ios` succeeds with a Hermes bundle of **4.73 MB — unchanged**. Two more sellable SKUs, a new tail
+silhouette and a pattern renderer for no measurable bundle cost. **That is the marginal-cost-per-SKU
+argument for staying 2D demonstrated a second time, and this time with real shape variety rather
+than recolors** — the 3D report's decisive reason for deferring to v2 gets stronger, not weaker.
+
+### Found in review
+
+- **`ShopScreen` could not scroll, and the list just grew 67%** (fixed). `Screen` is a fixed
+  `flex: 1` View — the exact finding the debug-panel review made about Settings, whose note named
+  `ShopScreen` as the next candidate "if it gains content". It gained two of five rows. Measured:
+  header + 5 rows (~77pt each) + Restore ≈ 621pt against ≈ 761pt of usable height on a 6.1" device,
+  so it still fits *there*, but ≈ 627pt against ≈ 618pt on an SE, where "Restore purchases" is what
+  goes off-screen. A sixth species overflows everywhere. Fixed with the same `ScrollView` treatment
+  Settings and onboarding use; inert while the content fits.
+- **The fin-split equivalence test was near-circular** (fixed) — see extension point 1 above. It
+  compared `buildFishGeometry(params)` against a rebuild from those same `params`, both through the
+  *new* builder. Now pinned to the literal pre-split values, and mutation-checked: moving Coral
+  Tetra's Fry fin scales from 0.7 to 0.8 **together** passed the original test and fails the
+  pinned one.
+
+### Flagged, not fixed
+
+- **`SpeciesSwatch` clips every species' tail, and the shark is the species that can least afford
+  it.** Pre-existing since M6a, not introduced here, which is why it was not changed unilaterally.
+  `scale = (size * 0.42) / bodyRadiusX` fits the *body* to 84% of a 44pt canvas, leaving ~3.5pt per
+  side; the tail needs ~19pt beyond the hinge. Coral Tetra's tail already renders ~15pt off the
+  left edge. It matters more now because the Reef Shark's entire identity is its crescent tail and
+  large dorsal, so its $4.49 shop preview is close to a plain grey oval. The fix is to fit the
+  species' *full* geometry bounds rather than `bodyRadiusX`, which changes how all five swatches
+  are framed — a visual call to make while looking at a screen, ideally in the same sitting as the
+  on-device gates.
+- **The Reef Shark's dorsal fin sweeps forward to the tip of its nose at Elder.** `point()` scales
+  a fin's *offset from its hinge* by the fin scale, so `dorsalFinScale: 2.3` moves the dorsal's
+  reference endpoint to body-local x ≈ 37.9 against a body radius of 38. Geometrically consistent
+  and within the system's expressiveness, but at that magnitude it reads as a forward-leaning sail
+  rather than a dorsal. Judge it on the phone; the fix, if wanted, is either a lower scale or
+  splitting position from size in `point()`.
+- **Coral Tetra (hue 12) and Clownfish (hue 22) are 10° apart.** `model.test.ts`'s "every species
+  has a distinct hue" check passes on strict inequality, but these two are both coral-orange. The
+  stripes and the body ratio carry the distinction, which is the pass's whole thesis — worth
+  confirming on the phone that they read as different fish at tank scale.
+- **Cross-species merging is now observable across five species, not three.** The M6a flag below is
+  unchanged and one step more pressing: a user with two Sharks and one Clownfish gets no
+  explanation, just a fish that will not select.
+- **The `Fish.tsx` sprite still has no component test.** The stripe clip path is exercised at mount
+  only through `ShopScreen.test.tsx`'s `SpeciesSwatch` (whose Skia stub now includes `Rect` and
+  `addOval`, so all five rows really do build). The tank renderer itself remains untested — a
+  pre-existing gap, but the stripe overlay is the first thing in it with non-trivial composition.
 
 ---
 

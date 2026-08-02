@@ -54,10 +54,22 @@ force **full** motion even when iOS accessibility asks for reduced, not just the
 and a first-launch explainer of the core loop.
 
 M6a adds the shop: an `EntitlementProvider` interface shaped after a real IAP SDK, a mock behind
-it that is genuinely async and fails one purchase in ten on purpose, two buyable species (Golden
-Koi, Indigo Betta) drawn from the same procedural system as the starter rather than as assets, a
-locked/desaturated preview treatment, an unlock animation, and a toggle for which species new fry
-hatch as. No real money is involved anywhere; swapping in RevenueCat at M6b changes one file.
+it that is genuinely async and fails one purchase in ten on purpose, buyable species drawn from the
+same procedural system as the starter rather than as assets, a locked/desaturated preview
+treatment, an unlock animation, and a toggle for which species new fry hatch as. No real money is
+involved anywhere; swapping in RevenueCat at M6b changes one file.
+
+**There are five species now, and they differ in shape, not just hue.** Coral Tetra (starter),
+Golden Koi ($1.99), Indigo Betta ($2.99), Reef Shark ($4.49) and Clownfish ($3.99). The shark is an
+elongated torpedo body — more than twice as long as it is tall, against roughly 1.5× for the others
+— with an oversized dorsal fin, modest pectorals and a forked crescent tail; the clownfish is a
+chubbier body carrying the app's first pattern, white bands clipped to its own silhouette. Getting
+there needed three small additions to the shared parameter record (independent dorsal/pectoral fin
+scales, a tail-shape option, and a pattern option), all of which are additive: every species that
+predates them renders byte-for-byte as before, pinned by tests against the original values. Two
+more sellable species, a new tail silhouette and a pattern renderer cost **nothing measurable** in
+bundle size — which is the concrete version of why this app draws its fish procedurally in 2D
+rather than shipping 3D assets.
 
 **Two honest caveats before the decision gate.** "Restore purchases" is close to a no-op — the
 mock reads ownership out of the same local store the result is reconciled into, so it cannot change
@@ -67,7 +79,7 @@ cap a fish, 45 completed sessions to an Elder. The debug panel makes those mecha
 without waiting; it deliberately does not answer whether the pacing is right. Judge that from real
 use. Both are written up in [`docs/PLAN.md`](docs/PLAN.md).
 
-Everything machine-checkable passes: 308 unit tests across 19 suites, type-check, `expo-doctor`
+Everything machine-checkable passes: 346 unit tests across 19 suites, type-check, `expo-doctor`
 18/18, and a 4.73 MB iOS bundle export. Everything still open needs a real iPhone.
 
 ## Running it
@@ -127,8 +139,13 @@ should be real 3D, Forest-style, instead of the planned 2D Skia fish. It contain
 
 Short version: 3D works and does **not** cost Expo Go compatibility, but it is recommended for
 deferral to v2 — a new fish species costs hours as a 2D parameter record and days as a rigged 3D
-asset, and selling species is the business model. Revisit at the M6a gate.
+asset, and selling species is the business model. The Reef Shark and Clownfish added since then are
+the evidence for that: genuinely different silhouettes, a few dozen lines each, zero bundle growth.
+Revisit at the M6a gate.
 
 ## Monetization
 
 IAP unlocks for additional pet species/biomes on top of a free base app with one starter species.
+Four species are sellable today ($1.99–$4.49), all built as parameter records in the same
+procedural renderer — so the marginal cost of the next SKU stays measured in hours, not asset
+pipelines.
