@@ -36,6 +36,50 @@ export interface SessionRewardResult {
   spawned: boolean;
 }
 
+interface DistributeResult {
+  fish: Fish[];
+  awardedFishId: string;
+  spawned: boolean;
+}
+
+/**
+ * The actual grow-or-spawn rule (docs/PLAN.md M3, extended M4 for overflow), factored out so it
+ * can recurse on itself for the leftover XP that would otherwise be clamped away at a stage cap.
+ * Growing the selected target never crosses *its own* cap — `addXp` still clamps exactly like
+ * before — but the remainder above that cap is not discarded: it is re-fed through this same
+ * selection rule (grow the next fish with room, or hatch a fresh Fry once every fish is capped),
+ * exactly as if it were the reward for a follow-on session. A fish selected as the grow target
+ * also recovers from `sick` here (docs/PLAN.md M4 recovery rule) — being chosen as the thing a
+ * completed session grows is what cures it, whether or not this particular call is the one that
+ * carries the overflow.
+ */
+function distributeXp(fish: Fish[], xp: number, now: number, idFactory: () => string): DistributeResult {
+  const growthTarget = fish.find((f) => f.xp < GROWTH.xpPerStage);
+
+  if (!growthTarget) {
+    const hatched = addXp(createFish(STARTER_SPECIES_ID, now, idFactory()), xp);
+    return { fish: [...fish, hatched], awardedFishId: hatched.id, spawned: true };
+  }
+
+  const room = GROWTH.xpPerStage - growthTarget.xp;
+  const grown = fish.map((f) => {
+    if (f.id !== growthTarget.id) return f;
+    return { ...addXp(f, Math.min(xp, room)), health: 'healthy' as const };
+  });
+
+  if (xp <= room) {
+    return { fish: grown, awardedFishId: growthTarget.id, spawned: false };
+  }
+
+  // Overflow: the target is now sitting at exactly its cap (never past it — `addXp` still
+  // clamps), and what's left over is handed to the same selection rule again instead of being
+  // discarded. `awardedFishId` stays the *primary* target — the fish this session's XP actually
+  // landed on first — even when the overflow goes on to grow (or spawn) a different one.
+  const overflow = xp - room;
+  const rest = distributeXp(grown, overflow, now, idFactory);
+  return { fish: rest.fish, awardedFishId: growthTarget.id, spawned: rest.spawned };
+}
+
 /**
  * Applies one session's reward to a fish collection (docs/PLAN.md M3 spawn rule — supersedes
  * M2's "only spawn if zero fish"): grow an existing fish that still has room in its current
@@ -43,18 +87,15 @@ export interface SessionRewardResult {
  * collection is empty, or every fish is already capped for its stage and growing one further
  * would just be clamped away. This is what makes a second (and third, ...) fish reachable at
  * all; merging (`src/features/pet/merge.ts`) is the only way any of them cross a stage boundary.
+ *
+ * M4: XP that would push the selected fish past its stage cap is never discarded — the leftover
+ * carries into a follow-on grow-or-spawn using `distributeXp` above (a fish at 110/120 that earns
+ * 25 XP lands on exactly 120, and the other 15 XP starts a new Fry rather than evaporating).
+ *
  * Never mutates its input.
  */
 export function applySessionReward(input: SessionRewardInput): SessionRewardResult {
   const xpAwarded = xpForFocusMs(input.focusMs);
-
-  const growthTarget = input.fish.find((f) => f.xp < GROWTH.xpPerStage);
-
-  if (!growthTarget) {
-    const hatched = addXp(createFish(STARTER_SPECIES_ID, input.now, input.idFactory()), xpAwarded);
-    return { fish: [...input.fish, hatched], awardedFishId: hatched.id, xpAwarded, spawned: true };
-  }
-
-  const fish = input.fish.map((f) => (f.id === growthTarget.id ? addXp(f, xpAwarded) : f));
-  return { fish, awardedFishId: growthTarget.id, xpAwarded, spawned: false };
+  const { fish, awardedFishId, spawned } = distributeXp(input.fish, xpAwarded, input.now, input.idFactory);
+  return { fish, awardedFishId, xpAwarded, spawned };
 }

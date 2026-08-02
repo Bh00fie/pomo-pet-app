@@ -126,3 +126,100 @@ describe('applySessionReward', () => {
     expect(result.fish).toHaveLength(3);
   });
 });
+
+describe('applySessionReward — XP overflow at the stage cap (M4)', () => {
+  const idFactory = () => 'new-fry';
+
+  it('carries the remainder into a new fry instead of discarding it: 110/120 + 25 -> 120, fry at 15', () => {
+    const almostCapped: Fish = { ...createFish(STARTER_SPECIES_ID, 0, 'almost'), xp: GROWTH.xpPerStage - 10 };
+
+    const result = applySessionReward({
+      fish: [almostCapped],
+      focusMs: 25 * MS_PER_MINUTE, // xpPerFocusMinute is 1 by default -> 25 XP awarded
+      now: 5000,
+      idFactory,
+    });
+
+    expect(result.fish).toHaveLength(2);
+    const grown = result.fish.find((f) => f.id === 'almost')!;
+    const fry = result.fish.find((f) => f.id === 'new-fry')!;
+    expect(grown.xp).toBe(GROWTH.xpPerStage);
+    expect(fry.xp).toBe(15);
+    expect(fry.xp).not.toBe(0);
+    expect(fry).toMatchObject({ speciesId: STARTER_SPECIES_ID, stage: 'fry', bornAt: 5000, health: 'healthy' });
+  });
+
+  it('does not overflow at all when the award exactly fills the remaining room', () => {
+    const almostCapped: Fish = { ...createFish(STARTER_SPECIES_ID, 0, 'almost'), xp: GROWTH.xpPerStage - 25 };
+
+    const result = applySessionReward({
+      fish: [almostCapped],
+      focusMs: 25 * MS_PER_MINUTE,
+      now: 0,
+      idFactory,
+    });
+
+    expect(result.fish).toHaveLength(1);
+    expect(result.fish[0].xp).toBe(GROWTH.xpPerStage);
+    expect(result.spawned).toBe(false);
+  });
+
+  it('spills overflow into a second under-cap fish rather than spawning, when one exists', () => {
+    const almostCapped: Fish = { ...createFish(STARTER_SPECIES_ID, 0, 'almost'), xp: GROWTH.xpPerStage - 10 };
+    const growing = createFish(STARTER_SPECIES_ID, 0, 'growing');
+
+    const result = applySessionReward({
+      fish: [almostCapped, growing],
+      focusMs: 25 * MS_PER_MINUTE,
+      now: 0,
+      idFactory,
+    });
+
+    expect(result.fish).toHaveLength(2); // no new fry — the second fish absorbed the overflow
+    const grown = result.fish.find((f) => f.id === 'almost')!;
+    const spilled = result.fish.find((f) => f.id === 'growing')!;
+    expect(grown.xp).toBe(GROWTH.xpPerStage);
+    expect(spilled.xp).toBe(15);
+  });
+
+  it('chains overflow across multiple already-capped fish before finally spawning', () => {
+    const cappedA = addXp(createFish(STARTER_SPECIES_ID, 0, 'capped-a'), GROWTH.xpPerStage);
+    const almostB: Fish = { ...createFish(STARTER_SPECIES_ID, 0, 'almost-b'), xp: GROWTH.xpPerStage - 5 };
+
+    // 100 XP: capped-a is already full (0 room, all 100 overflow immediately); almost-b has 5
+    // XP of room, absorbing 5 and passing on 95 to a freshly hatched fry.
+    const result = applySessionReward({
+      fish: [cappedA, almostB],
+      focusMs: 100 * MS_PER_MINUTE,
+      now: 9000,
+      idFactory,
+    });
+
+    expect(result.fish).toHaveLength(3);
+    const a = result.fish.find((f) => f.id === 'capped-a')!;
+    const b = result.fish.find((f) => f.id === 'almost-b')!;
+    const fry = result.fish.find((f) => f.id === 'new-fry')!;
+    expect(a.xp).toBe(GROWTH.xpPerStage);
+    expect(b.xp).toBe(GROWTH.xpPerStage);
+    expect(fry.xp).toBe(95);
+  });
+
+  it('cures a sick target fish by the mere act of growing it, even mid-overflow', () => {
+    const sickAlmostCapped: Fish = {
+      ...createFish(STARTER_SPECIES_ID, 0, 'sick-fish'),
+      xp: GROWTH.xpPerStage - 10,
+      health: 'sick',
+    };
+
+    const result = applySessionReward({
+      fish: [sickAlmostCapped],
+      focusMs: 25 * MS_PER_MINUTE,
+      now: 0,
+      idFactory,
+    });
+
+    const grown = result.fish.find((f) => f.id === 'sick-fish')!;
+    expect(grown.health).toBe('healthy');
+    expect(grown.xp).toBe(GROWTH.xpPerStage);
+  });
+});
