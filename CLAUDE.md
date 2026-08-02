@@ -1,20 +1,32 @@
 # Project Context
 
-## Status: M0 scaffolded — building has started
+## Status: M1 (timer engine) built — M2 is next
 
-The Expo app exists on `main` and builds. `docs/PLAN.md` is the milestone sequence; M1 (timer
-engine) is the next thing to write.
+The Expo app exists on `main`, builds, and has a working Pomodoro timer. `docs/PLAN.md` is the
+milestone sequence; M2 (pet/zoo core + Skia tank rendering) is the next thing to write.
 
 ### Current repo state (2026-08-02)
 
 - `main` — Expo SDK 54 app. `app/` holds Expo Router routes only (thin re-exports); everything
   real is under `src/{config,features,store,anim,ui,theme}`. Zustand + AsyncStorage `persist`
   with `SCHEMA_VERSION` and a migration runner wired in from commit one
-  (`src/store/migrations.ts`). Feature screens are labelled placeholders, not implementations.
-- Verified: `npx tsc --noEmit` clean, `npx expo-doctor` 18/18, `npx expo export --platform ios`
-  succeeds (3.81 MB Hermes bundle), `expo --version` resolves to 54.x.
-- **Not verified**: the app has never been opened in App Store Expo Go on a physical device. That
-  is the last M0 gate and it needs the user's phone. Do not mark M0 done until they confirm it.
+  (`src/store/migrations.ts`). Aquarium/stats/shop screens are still labelled placeholders.
+- **Timer engine (M1) is real.** `src/features/timer/machine.ts` is a pure transition function
+  (no React/RN/Expo imports — keep it that way) over
+  `{ status, mode, endsAt, durationMs, pausedRemainingMs }`. Time is always absolute: a running
+  session is an `endsAt` timestamp and remaining time is recomputed from `Date.now()` on every
+  read. **Never introduce a decrementing counter** — JS intervals die when the app backgrounds.
+  `useTimerStore.ts` (transient, unpersisted) applies the machine and owns the notification
+  side effects; `useTimer.ts` is the React binding (tick cadence + `AppState` foreground
+  re-read); `FocusScreen.tsx` renders it and holds no timing logic of its own.
+- **Tests exist and must stay green**: `npm test` (jest-expo preset), 72 tests across 5 suites in
+  `src/features/timer/__tests__/`. Note `@testing-library/react-native` v14 has an *async* API —
+  `render` and `fireEvent` must both be awaited.
+- Verified: `npm test` 72/72, `npx tsc --noEmit` clean, `npx expo-doctor` 18/18,
+  `npx expo export --platform ios` succeeds (4.02 MB Hermes bundle), `expo --version` → 54.x.
+- **Not verified**: anything needing the user's phone — that the app opens in App Store Expo Go
+  (the M0 gate), and that the scheduled end-of-session notification actually fires (the M1 gate).
+  Do not mark either done until they confirm.
 - `explore/3d-aquarium` — a parallel spike, deliberately **not merged and with no PR open**.
   See "3D exploration" below.
 

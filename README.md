@@ -6,17 +6,21 @@ the hit — that accountability loop (in the spirit of apps like Forest) is the 
 
 ## Status
 
-🏗 **M0 scaffolded.** The Expo app exists and builds; feature work (M1 timer engine onward) hasn't
-started. See [`docs/PLAN.md`](docs/PLAN.md) for the milestone sequence and what's actually verified.
+🏗 **M1 built — the timer works.** Start/pause/resume/reset run off an absolute-timestamp state
+machine (`endsAt`, never a decrementing counter), with customizable work/break lengths and a local
+notification scheduled for the end of the session. See [`docs/PLAN.md`](docs/PLAN.md) for the
+milestone sequence and what's actually verified.
 
-The one open M0 item is the on-device gate: opening the project in App Store Expo Go on a real
-iPhone. Everything else (type-check, `expo-doctor`, iOS bundle export) passes.
+Open items both need a real iPhone: the M0 gate (the project opens in App Store Expo Go) and the
+M1 gate (the end-of-session notification genuinely fires). Everything machine-checkable —
+72 unit tests, type-check, `expo-doctor`, iOS bundle export — passes.
 
 ## Running it
 
 ```sh
 npm install
 npx expo start   # scan the QR with App Store Expo Go (SDK 54)
+npm test         # jest-expo — timer engine + screen tests
 npm run typecheck
 npm run doctor
 ```

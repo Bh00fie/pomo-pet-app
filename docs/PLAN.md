@@ -42,12 +42,35 @@ babel plugin), `@shopify/react-native-skia`, `zustand`, `@react-native-async-sto
 `expo-notifications`, `expo-haptics`, `react-native-gesture-handler`, `react-native-screens`,
 `react-native-safe-area-context`.
 
-## M1 — Timer engine
+## M1 — Timer engine  [~] built and unit-tested, awaiting the on-device demo
 
-- [ ] Absolute-timestamp state machine (`endsAt`, not a decrementing counter — JS timers don't
-      survive backgrounding)
-- [ ] Local notification scheduled at `endsAt`, cancelled on pause/reset
+- [x] Absolute-timestamp state machine (`endsAt`, not a decrementing counter — JS timers don't
+      survive backgrounding) — `src/features/timer/machine.ts`, a pure transition function with
+      no React/RN/Expo imports, covering idle→running→paused→completed→abandoned
+- [x] Start/pause/reset wired into the Focus screen (`useTimer.ts` + `useTimerStore.ts`), with an
+      `AppState` listener that re-reads the wall clock on foreground
+- [x] Customizable work/break lengths (MVP feature 1) — mode switch + `+/-` steppers on the Focus
+      screen, clamped by `TIMER.minMinutes`/`maxMinutes`, persisted through the settings store
+- [~] Local notification scheduled at `endsAt`, cancelled on pause/reset — written and unit-tested
+      against a mocked `expo-notifications` (correct DATE trigger, correct cancellations), but
+      **actual delivery cannot be verified without a device**, so this stays `[~]`
 - [ ] Demo: start a 25-min timer, background the app, return — time is correct, notification fires
+
+Verified on 2026-08-02, machine-checkable parts only:
+
+- `npm test` → **72 tests, 5 suites, all passing** (`jest-expo` preset)
+  - `machine.test.ts` (32) — every transition, the `endsAt`/`pausedRemainingMs` arithmetic
+    including a 12-cycle pause/resume loop that must not drift a millisecond, completion exactly
+    at the boundary, and expiry that happened entirely while backgrounded
+  - `FocusScreen.test.tsx` (9) — the screen the user actually taps: Start really starts, the
+    clock counts down, Pause holds it, Resume continues from the same remainder
+  - plus `notifications` (13), `useTimerStore` (11) and `durations` (7)
+- `npx tsc --noEmit` → clean
+- `npx expo-doctor` → 18/18 checks passed
+- `npx expo export --platform ios` → succeeds; Hermes bundle **4.02 MB** (3.81 MB at M0)
+
+The remaining gate needs your phone: run a real session, lock/background the app, and confirm both
+that the time is right on return and that the notification actually fires.
 
 > **A 3D aquarium alternative was explored and is parked.** Prompted by Forest's 3D trees, the
 > branch `explore/3d-aquarium` holds a working `expo-gl` + `three` + `react-three-fiber`
