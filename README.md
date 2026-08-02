@@ -6,11 +6,32 @@ the hit — that accountability loop (in the spirit of apps like Forest) is the 
 
 ## Status
 
-✅ **The whole free-phase MVP (M0–M6a) is built.** Every screen is real, nothing is a placeholder,
-and every line of it was written without spending a penny on an Apple Developer account. What is
-left is not code: it is running it on a phone and deciding whether it is worth the $99. See the
-**consolidated on-device checklist** in [`docs/PLAN.md`](docs/PLAN.md) — one seven-step pass
-covering all six milestones.
+✅ **The free-phase MVP (M0–M6a) is feature-complete.** Every screen is real, nothing is a
+placeholder, every milestone has been independently reviewed, and every line of it was written
+without spending a penny on an Apple Developer account.
+
+**The only thing left is your phone.** Nothing in this repo has ever run on one. The remaining work
+is not code — it is an eight-step pass through the **consolidated on-device checklist** in
+[`docs/PLAN.md`](docs/PLAN.md), and then deciding whether the app is worth the $99/yr Apple
+Developer Program fee. In short, that checklist is:
+
+1. It opens in App Store Expo Go and all five tabs load; onboarding shows once (M0)
+2. A session runs, the end-of-session notification fires, pause/resume/reset never drift (M1)
+3. A fish appears, swims, reads as a fish, holds 60fps, and survives a force-quit (M2)
+4. Backgrounding past 8s sicken a fish; the next completed session cures it; a Control Center
+   swipe or a sub-8s lock does **not** trigger it (M3/M4)
+5. The merge sequence lands — converge → burst → reveal — and reads as satisfying (M3)
+6. Stats and Settings lay out correctly, and Reduce Motion `off` with the iOS setting `on`
+   visibly restores full motion (M5)
+7. The shop demos end to end, including the 1-in-10 simulated failure, and a bought species is
+   actually visible in the tank (M6a)
+8. The debug panel is reachable, obviously debug-only, and leaves Stats honest
+
+Steps 5 and 7 used to be the problem: at the real growth curve they needed roughly six hours of
+focus time to reach. A **testing-only debug panel** in Settings now fast-forwards them — grant XP,
+cap all fish, spawn a fry — routed through the exact same reward/merge/spawn logic the app itself
+uses, so what you are judging is the real mechanic, not a mock-up. The growth numbers themselves
+were deliberately left alone; the panel is marked for removal before any real build.
 
 What that adds up to: start/pause/resume/reset run off an
 absolute-timestamp state machine (`endsAt`, never a decrementing counter), with customizable
@@ -39,14 +60,15 @@ locked/desaturated preview treatment, an unlock animation, and a toggle for whic
 hatch as. No real money is involved anywhere; swapping in RevenueCat at M6b changes one file.
 
 **Two honest caveats before the decision gate.** "Restore purchases" is close to a no-op — the
-mock reads ownership out of the same local store the result is reconciled into, so it cannot
-change anything, and the flow exists for M6b rather than for today. And at the shipped growth
-curve it takes roughly two hours of real focus to cap a fish and six before a merge is possible,
-so the merge mechanic and buyable species — two of the eight MVP features — are hard to actually
-experience in a demo. Both are written up in [`docs/PLAN.md`](docs/PLAN.md).
+mock reads ownership out of the same local store the result is reconciled into, so it cannot change
+anything, and the flow exists for M6b rather than for today; a restore that "works" on your phone
+is evidence of nothing. And the growth curve is still the real one: roughly two hours of focus to
+cap a fish, 45 completed sessions to an Elder. The debug panel makes those mechanics *testable*
+without waiting; it deliberately does not answer whether the pacing is right. Judge that from real
+use. Both are written up in [`docs/PLAN.md`](docs/PLAN.md).
 
-Everything machine-checkable passes: 286 unit tests across 18 suites, type-check, `expo-doctor`
-18/18, and an iOS bundle export. Everything still open needs a real iPhone.
+Everything machine-checkable passes: 308 unit tests across 19 suites, type-check, `expo-doctor`
+18/18, and a 4.73 MB iOS bundle export. Everything still open needs a real iPhone.
 
 ## Running it
 

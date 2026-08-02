@@ -1,19 +1,17 @@
 # Project Context
 
-## Status: M6a built — **the whole free-phase MVP (M0–M6a) is now written.** Only the phone gates and the $99 decision remain
+## Status: M6a complete — **the free-phase MVP (M0–M6a) is feature-complete.** Only the phone gates and the $99 decision remain
 
-Every milestone through M6a is code-complete and unit-tested. Nothing in this repo has ever run on
-a phone. The next action is not more code: it is working through the **consolidated on-device
-checklist in `docs/PLAN.md`** (one list covering all six milestones, added at the M6a review
-because this is the moment it matters) and then deciding about the Apple Developer $99.
+Every milestone through M6a is code-complete, unit-tested and independently reviewed. Nothing in
+this repo has ever run on a phone. The next action is not more code: it is working through the
+**consolidated on-device checklist in `docs/PLAN.md`** (one list covering all six milestones, plus
+a step for the debug panel) and then deciding about the Apple Developer $99.
 
-**Read this before proposing what to build next:** two of the eight `docs/MVP.md` features —
-merging (feature 4) and buyable species (feature 8) — are effectively **unreachable in a demo**,
-because `GROWTH.xpPerStage` is 120 at 1 XP/minute, so it takes ~2 hours of real focus to cap one
-fish and ~6 hours before a merge is possible, and a purchased species only becomes visible when a
-new Fry hatches (which needs every existing fish capped). The gate is being reached with the two
-headline mechanics undemonstrable. See the M6a limitations in `docs/PLAN.md`; **this needs the
-user's decision** (a debug XP-grant affordance vs. retuning `GROWTH`), not a unilateral fix.
+**Do not propose new features before that checklist is done.** The one thing that was blocking it
+— that merging (MVP feature 4) and buyable species (feature 8) needed ~6 hours of real focus to
+reach — is **resolved**: the user chose a debug panel over retuning pacing, and it is built. See
+the M6a debug-panel notes below. `GROWTH` is deliberately unchanged, so the *pacing* question is
+still open as a design question; it is just no longer blocking the decision.
 
 The Expo app exists on `main`, builds, has a working Pomodoro timer, and completed focus sessions
 hatch/grow procedurally drawn Skia fish that swim in the Aquarium tab. As of M3 the full core loop
@@ -232,13 +230,40 @@ milestone**, and it carries the $99 decision gate.
     Three species exist; a user with two Koi Fry and one Tetra Fry simply cannot merge and gets no
     explanation. Still defensible (the merge output carries one `speciesId`), but the rule should
     probably be stated in the UI. Product call, flagged not fixed.
+- **The debug panel (post-M6a, the user's call at the gate) is real — and it is a shortcut through
+  the real logic, not a parallel one.** A "⚠ DEBUG — TESTING ONLY" card at the bottom of Settings
+  (dashed amber border, distinct on purpose) with Grant XP (+120/+360/+1000), Cap all fish, and
+  Spawn a fry. It exists because real pacing made merge and a bought species undemoable before the
+  $99 decision; **`GROWTH.xpPerStage`/`xpPerFocusMinute`/`fishPerMerge` are deliberately untouched
+  — do not "fix" the pacing by editing them without asking.**
+  - **Each action calls the same function the real path calls, and that is the invariant to keep.**
+    `debugGrantXp` → `distributeXp` from `reward.ts` (made `export` rather than copied — the
+    selection rule, the `addXp` clamp and the M4 overflow recursion are all the real ones);
+    `debugCapAllFish` → `addXp(f, GROWTH.xpPerStage)`, not a direct `xp =` write;
+    `debugSpawnFish` → the same `createFish` primitive as the M3 spawn branch. If a future change
+    makes any of these a reimplementation, the panel stops proving anything about the real app.
+  - **`resolveSpawnSpeciesId` is now the single active-species resolution** — extracted from
+    `awardSessionCompletion`, used by it and by `debugSpawnFish`, and exported as the
+    `selectSpawnSpeciesId` selector so UI that *names* the species reads the same answer. This
+    removed a duplication rather than avoiding adding one. Never read `settings.activeSpeciesId`
+    directly for this: it is the one settings field that can name a species the user does not own.
+  - **No accountability bypass, and this is load-bearing.** None of the three touches `stats`, the
+    streak, or `health` — capping a fish deliberately does *not* cure it, which stays exclusive to
+    being picked as a real grow target. So the panel can hand you fish but not a streak or focus
+    time you did not earn, and Stats stays honest while the user tests. Tested from both sides.
+  - **`debugGrantXp` cannot produce more than one new fish**, and the panel's on-screen copy says
+    so: `distributeXp`'s spawn branch is the recursion's base case and absorbs *all* remaining XP
+    into one Fry, where `addXp` clamps it. +1000 XP on an empty tank is one capped Fry, not eight.
+    Three fish is Spawn ×3 then Cap all.
+  - **`TODO: remove or gate before EAS build submission` is on both the JSX and the store action
+    block.** Hard M6b/M7 blocker. Do not let it ship.
 - `useSessionReward` is mounted **once**, at `app/_layout.tsx`, so a session finishing on any tab
   awards. It de-dupes on the timer's `endsAt` (stable per session) via a hook-local ref — that
   guard is per hook instance, so **do not mount it a second time** or every session awards twice.
   Note `useTimer()` itself *is* mounted twice (root bridge + `FocusScreen`), so there are two
   `AppState` listeners; that is safe only because `noteBackgrounded`/`resolveForeground` are
   idempotent per excursion. Keep them that way.
-- **Tests exist and must stay green**: `npm test` (jest-expo preset), 286 tests across 18 suites.
+- **Tests exist and must stay green**: `npm test` (jest-expo preset), 308 tests across 19 suites.
   Note `@testing-library/react-native` v14 has an *async* API — `render`, `renderHook` and
   `fireEvent` must all be awaited. **One exception, learned at M6a:** `fireEvent.press` returns
   whatever the handler returns, so awaiting it on an `async` `onPress` blocks until the *whole*
@@ -250,24 +275,49 @@ milestone**, and it carries the $99 decision gate.
   it composes with (`geometry.ts`) is tested instead. **`jest.config.js` pins `process.env.TZ` to
   `America/New_York`** — see the M4 review note below for why that has to live there and not in a
   test file.
-- Verified independently on 2026-08-02 after the M6a build and review: `npm test` 286/286
-  (18 suites), `npx tsc --noEmit` clean, `npx expo-doctor` 18/18, `npx expo export --platform ios`
-  succeeds (4.72 MB Hermes bundle; 4.71 MB at M5, 4.7 at M4, 4.69 at M3, 4.67 at M2, 4.02 at M1).
-  M6a cost ~10 KB — a whole shop, two species and a Skia swatch renderer, with no new dependency.
+- Verified independently on 2026-08-02, twice — after the M6a build/review (`npm test` 286/286,
+  18 suites, 4.72 MB) and again after the debug panel and its review: **`npm test` 308/308
+  (19 suites), `npx tsc --noEmit` clean, `npx expo-doctor` 18/18, `npx expo export --platform ios`
+  succeeds (4.73 MB Hermes bundle**; 4.71 MB at M5, 4.7 at M4, 4.69 at M3, 4.67 at M2, 4.02 at M1).
+  M6a cost ~10 KB — a whole shop, two species and a Skia swatch renderer, with no new dependency —
+  and the debug panel another ~10 KB.
 - **Not verified**: anything needing the user's phone, which is now *every remaining MVP item*.
-  `docs/PLAN.md` holds the **consolidated seven-step on-device checklist** covering all six
+  `docs/PLAN.md` holds the **consolidated eight-step on-device checklist** covering all six
   milestones in one pass — use that rather than the six scattered per-milestone gates. In short:
   the app opens in App Store Expo Go (M0), the end-of-session notification fires (M1), the tank
-  looks right and holds 60fps (M2), the merge sequence reads as satisfying (M3 — but see the
-  pacing problem at the top of this file), a sick fish reads as unwell and real iOS `AppState`
-  behaves as modelled (M4), the new screens lay out correctly and Reduce Motion `'off'` with the
-  iOS setting **on** visibly restores full motion (M5), and the shop demos end to end including
-  the 1-in-10 simulated failure (M6a). Do not mark any of them done until the user confirms.
+  looks right and holds 60fps (M2), a sick fish reads as unwell and real iOS `AppState` behaves as
+  modelled (M4), the merge sequence reads as satisfying (M3 — **now reachable in a minute via the
+  debug panel instead of six hours**), the new screens lay out correctly and Reduce Motion `'off'`
+  with the iOS setting **on** visibly restores full motion (M5), the shop demos end to end
+  including the 1-in-10 simulated failure *and* a bought species is visible in the tank (M6a), and
+  the debug panel itself is reachable and leaves Stats honest. Do not mark any of them done until
+  the user confirms. **The checklist is now completable in one sitting** — it was not before the
+  debug panel, and that is the single reason the panel exists.
 
 ### Open issues found in the M2/M3/M4/M5/M6a reviews (2026-08-02)
 
 Fixed already:
 
+- **The Settings screen could not scroll, and the debug panel overflowed it** (debug-panel review;
+  the one real bug in that commit). `Screen` is a fixed `flex: 1` View with no scroll. Three cards
+  fitted; the debug card adds ~340pt against ~694pt of usable height on a 6.1" phone, so its own
+  bottom two buttons — Cap all fish and Spawn a fry, i.e. **exactly the pair that makes merge
+  reachable** — were clipped off-screen with no way to scroll to them. The affordance built to
+  unblock on-device testing would have been untappable on device, and it would have looked like a
+  store bug. Fixed with a `ScrollView`, the same treatment M5 gave onboarding for the same reason.
+  **Rule this proves (again): `Screen` does not scroll — any screen that grows past a viewport has
+  to opt in.** `ShopScreen` and `StatsScreen` are the next candidates if they gain content.
+- **The Spawn button could name a species it would not spawn** (debug-panel review). The label read
+  `settings.activeSpeciesId` directly while the action resolved through `resolveSpawnSpeciesId`,
+  which re-validates against `entitlements.unlockedSpeciesIds` — so an unowned active id gave a
+  button reading "Spawn a Golden Koi fry" that handed over a Coral Tetra. Fixed by exporting
+  `selectSpawnSpeciesId` so label and action share one resolution; caught by a mutation check.
+- **The debug panel had no component test** (debug-panel review) — and neither did the Settings
+  screen at all, since M5. The store actions were well covered, but nothing pinned the *wiring*:
+  a "+360 XP" button calling `debugGrantXp(120, …)` type-checks and passes every store test.
+  `SettingsScreen.test.tsx` now covers the three actions' wiring, the species-label agreement, and
+  that all three leave `stats` untouched. Same gap and same fix as the M6a "the Shop screen had no
+  test at all" finding — **a milestone's headline UI keeps shipping untested here.**
 - **The Buy button's `disabled` was not a lock** (M6a review — the one real bug in the write
   split). Two taps in the same frame both reached `purchaseSpecies`, because `disabled={pending}`
   is derived from React state that does not exist yet for the second tap. Against the mock this is
@@ -325,6 +375,23 @@ Fixed already:
 
 Checked and **confirmed sound**, listed because they were claims worth distrusting:
 
+- **The debug panel really does route through the real logic** (debug-panel review). Checked the
+  import, not the comment: `useAppStore.ts` imports `distributeXp` from `@/features/pet/reward` —
+  the same module `applySessionReward` lives in, which now calls the *exported* function rather
+  than a private copy. There is no second implementation of the selection/overflow rule anywhere.
+  `debugCapAllFish` genuinely goes through `addXp`'s clamp, `debugSpawnFish` genuinely through
+  `createFish`, and `resolveSpawnSpeciesId` really did replace the inline block in
+  `awardSessionCompletion` rather than sitting beside it.
+- **No accountability side effects are smuggled into any debug action** (debug-panel review). Read
+  all three bodies: each returns only `{ fish }` from its `set`, so `stats`, the streak,
+  `lastPenaltyToken` and `health` are untouchable by construction — capping a sick fish leaves it
+  sick. Pinned by tests at both the store and screen level.
+- **The "identical to a real session" test is real, not vacuous** (debug-panel review). It runs a
+  genuine `awardSessionCompletion(25 min)`, resets, runs `debugGrantXp` with the equivalent XP, and
+  compares the actual fish objects (`xp`, `speciesId`, `stage`, `bornAt`, `health`) with only the
+  random `id` stripped — not two empty arrays. Fair caveat on the word "byte-identical": ids
+  necessarily differ, and the case starts from an empty tank, so it exercises the *spawn* branch;
+  the grow-target and overflow branches are covered by the sibling tests rather than by this one.
 - **The write split's unmount case really is safe** (M6a). Traced, not assumed: `unlockSpecies` is
   the first statement after a successful result, has no is-mounted guard, and a zustand action
   captured at render still works after the component is gone. Now pinned by a test that unmounts
@@ -392,17 +459,16 @@ Checked and **confirmed sound**, listed because they were claims worth distrusti
 
 Flagged for the user, deliberately not fixed unilaterally:
 
-- **THE BIG ONE AT THE GATE: the two features you're deciding $99 on can't be demoed** (new, M6a).
-  `GROWTH.xpPerStage` is 120 at `xpPerFocusMinute` 1, so capping one fish is **two hours of real
-  focus** and a Fry→Juvenile merge is **~six hours**. And a purchased species only becomes visible
-  when a new Fry hatches, which the M3 spawn rule allows only once every existing fish is capped —
-  so buying Golden Koi changes the Shop row and *nothing else you can see*. That makes MVP feature
-  4 (merge) and feature 8 (buyable species) both unreachable in a demo session, at the exact
-  moment they are supposed to justify the spend. Two clean resolutions: a **debug-only affordance
-  in Settings** (grant XP / spawn a fish / cap all fish) next to the existing reset action, or
-  temporarily lowering `GROWTH.xpPerStage`, which conflates demo pacing with real pacing. This is
-  the successor to the older "Reaching Elder takes 45 sessions" flag, which was about pacing as
-  design; this is about pacing blocking the decision itself. **Needs the user's call.**
+- ~~**THE BIG ONE AT THE GATE: the two features you're deciding $99 on can't be demoed**~~
+  **Resolved** — the user chose the debug-only affordance in Settings over retuning `GROWTH`, and
+  it is built and reviewed (see the M6a debug-panel notes above). Merge and a bought species are
+  both reachable in under a minute now. **What is explicitly *not* resolved is the pacing itself:**
+  `GROWTH.xpPerStage` is still 120 at 1 XP/minute, so two hours of real focus per fish and 45
+  completed sessions to an Elder — the older "Reaching Elder takes 45 sessions" flag below is the
+  live version of that question, and it should be judged from real use, not from debug buttons.
+- **The debug panel must be removed or gated before any EAS build submission** (new). `TODO`s are
+  in place on both the JSX and the store action block. A hard M6b/M7 blocker — three buttons that
+  hand out fish must not reach real users. `__DEV__` is the cheap gate; deletion is the honest one.
 - **The provider/store divergence risk is structural and belongs to M6b** (new, M6a). The call
   site's half is now sound (see the fixes above), but three things only become real once
   RevenueCat is behind the interface, and none can be tested against a store-backed mock:
@@ -418,7 +484,7 @@ Flagged for the user, deliberately not fixed unilaterally:
 - **`docs/PLAN.md` M6a's "behind a dev-menu toggle" bullet was never built** (new, M6a). Retired
   rather than quietly ticked: there is no second provider to toggle to until M6b, so it would
   select between the mock and nothing. Endorsed. Noted because the *useful* dev affordance turns
-  out to be the XP grant above, not a provider switch.
+  out to be the XP grant above, not a provider switch — **and that one now exists.**
 - **Cross-species merging: M3 said "revisit at M6a" and M6a did not** (new, M6a). Three species
   now exist, so `evaluateMerge`'s same-species requirement is observable — two Koi Fry and one
   Tetra Fry cannot merge, and the species-grouped tap selection means the user gets no explanation,

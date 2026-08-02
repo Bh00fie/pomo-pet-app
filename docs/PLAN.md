@@ -457,10 +457,12 @@ Shop, which is M6a's job. What remains is phone-only: the layout gate below.
   has now made *user-visible* on a labelled tile. Whatever gets decided about the give-up
   exemption now has a UI consequence too.
 
-## M6a — Shop UX against the mock provider (free)  [~] built and unit-tested, awaiting the gate
+## M6a — Shop UX against the mock provider (free)  [~] built, reviewed, awaiting the gate
 
-**This is the last MVP milestone. Every line of the free-phase MVP is now written.** What is left
-is the part no terminal can do: using it on your phone, and then deciding about the $99.
+**This is the last MVP milestone, and it is now finished — including the post-review debug panel.
+Every line of the free-phase MVP is written, reviewed and green.** What is left is the part no
+terminal can do: using it on your phone, and then deciding about the $99. The consolidated
+checklist below is the whole remaining scope of the free phase.
 
 - [x] `EntitlementProvider` interface + `MockEntitlementProvider`.
       `src/features/shop/EntitlementProvider.ts` is shaped after what a real IAP SDK exposes
@@ -494,6 +496,10 @@ is the part no terminal can do: using it on your phone, and then deciding about 
       `entitlements.unlockedSpeciesIds` on **every** read, so a stale or corrupt value can never
       reach `reward.ts` — belt and braces, because the field is the one piece of settings that
       depends on entitlements.
+- [x] **Debug panel in Settings** (added after the M6a review, at the user's decision — see "The
+      debug panel" section below). Not in the original M6a scope; it exists because the review
+      found that real pacing made merge and buyable species undemoable, and the user chose a
+      testing-only affordance over retuning the pacing.
 - [ ] **Decision gate: this is the checkpoint to decide whether the app is worth the $99.**
       Everything through here required no Apple Developer account and no Xcode. See the
       consolidated on-device checklist below — it covers all six milestones, not just this one.
@@ -514,6 +520,30 @@ Verified on 2026-08-02 by an independent review pass, machine-checkable parts on
 - `npx tsc --noEmit` → clean
 - `npx expo-doctor` → 18/18 checks passed
 - `npx expo export --platform ios` → succeeds; Hermes bundle **4.72 MB** (4.71 MB at M5)
+
+Re-verified on 2026-08-02 after the debug panel was added and independently reviewed:
+
+- `npm test` → **308 tests, 19 suites, all passing** (286 at the M6a review). The new suites/blocks
+  are `SettingsScreen.test.tsx` (6, added at this review — the debug panel had no component test),
+  `useAppStore.test.ts`'s debug-action block (14) and `reward.test.ts`'s `distributeXp` block (2).
+- `npx tsc --noEmit` → clean; `npx expo-doctor` → 18/18
+- `npx expo export --platform ios` → succeeds; Hermes bundle **4.73 MB**. The whole debug panel
+  cost ~10 KB.
+
+Two bugs were found and fixed in that review, both in the panel's UI rather than its logic:
+
+- **The Settings screen could not scroll, and the debug card overflowed it.** `Screen` is a fixed
+  `flex: 1` View. Three cards fitted; the debug card adds ~340pt against ~694pt of usable height
+  on a 6.1" phone, so its own bottom two buttons — Cap all fish and Spawn a fry, i.e. the exact
+  pair that makes merge reachable — were clipped off-screen with no way to reach them. The
+  affordance built to unblock on-device testing would have been untappable on device. Fixed with a
+  `ScrollView`, the same treatment M5 gave onboarding for the same reason.
+- **The Spawn button could name a species it would not spawn.** The label read
+  `settings.activeSpeciesId` directly while the action resolved it through
+  `resolveSpawnSpeciesId`, which re-validates against `entitlements.unlockedSpeciesIds` — so an
+  unowned active id (a corrupt payload, a future refund) produced a button reading "Spawn a Golden
+  Koi fry" that handed over a Coral Tetra. Fixed by exporting `selectSpawnSpeciesId` from the store
+  so the label and the action share one resolution; verified by mutation.
 
 ### The write split, traced — the thing M6b inherits
 
@@ -542,21 +572,77 @@ could be skipped:
 **Verdict: the call site's half of the contract is now sound. The risk that remains is
 structural and belongs to M6b**, spelled out under "known and accepted limitations" below.
 
+### The debug panel — why it exists, and why `GROWTH` was not touched instead
+
+**Added after the M6a review, and it is the thing that makes the two headline mechanics testable
+at all.** The review's biggest finding was that `GROWTH.xpPerStage` (120) at
+`GROWTH.xpPerFocusMinute` (1) means **two hours of real focus to cap one fish and about six to
+reach a merge**, and that a purchased species only becomes visible when a new Fry hatches — which
+the M3 spawn rule allows only once every existing fish is capped. So MVP features 4 (merge) and 8
+(buyable species) were both unreachable in a demo session, at exactly the moment they are supposed
+to justify the $99.
+
+**The user's decision was the debug affordance, not the pacing change.** `GROWTH.xpPerStage`,
+`GROWTH.xpPerFocusMinute` and `GROWTH.fishPerMerge` are **deliberately untouched** and still
+describe the real intended pacing. Lowering them would have made the demo pleasant and the
+shipping product wrong, and would have conflated two numbers that are not the same number: the one
+that makes a test session productive, and the one that makes a year of use paced correctly. If the
+pacing turns out to be wrong, that is a separate, deliberate decision made *after* using the app —
+all three knobs are in `src/config/index.ts` and changing them needs no code change.
+
+A **"⚠ DEBUG — TESTING ONLY, NOT FOR SHIP"** card sits at the bottom of Settings, below the reset
+card, styled distinctly on purpose (dashed amber border, tinted background) so it can never be
+mistaken for a normal feature. Three actions:
+
+- **Grant XP (+120 / +360 / +1000)** → `useAppStore.debugGrantXp`, which calls the *same*
+  `distributeXp` from `reward.ts` that `applySessionReward` calls. Same first-fish-with-room
+  selection, same `addXp` clamp, same M4 overflow chain. Note what that means, and the panel says
+  so on screen: the spawn branch is the recursion's base case and absorbs **all** remaining XP into
+  a single Fry, so +1000 XP on an empty tank is one capped fish, not eight.
+- **Cap all fish** → `debugCapAllFish`, `addXp(f, GROWTH.xpPerStage)` over the collection — the
+  same clamp, not a direct `xp =` write. Deliberately does **not** change `health`: capping a fish
+  is not a way to cure a sick one, which stays exclusive to being picked as a real grow target.
+- **Spawn a fry** → `debugSpawnFish`, the same `createFish` primitive the M3 spawn branch uses,
+  with the species resolved by the shared `resolveSpawnSpeciesId` helper (extracted from
+  `awardSessionCompletion`, so active-species resolution is not duplicated a third time). It is
+  the one action that deliberately departs from real behaviour: it hatches unconditionally rather
+  than only when every fish is capped — that is the point, since it is what makes a purchased
+  species immediately visible.
+
+**No accountability bypass.** None of the three touches `stats`, the streak, or `health`. They are
+shortcuts through the reward *distribution* rule, not fake sessions: the panel can hand you fish,
+but it cannot hand you a streak you did not earn or a "focus time" number you did not spend, and
+the Stats screen stays honest while you use it. Pinned by tests on both sides — one asserts
+`debugGrantXp` produces the same fish state as a real `awardSessionCompletion` for the equivalent
+XP, another runs `debugCapAllFish` and then a real `mergeFish` end to end, and a third asserts
+`stats` is byte-identical before and after all three actions fire.
+
+**Before EAS build submission this card and the three store actions must be removed or gated.**
+There is a `TODO: remove or gate before EAS build submission` on both the JSX and the action block
+in `useAppStore.ts`. It is an M6b/M7 task, not an optional one.
+
 ### `docs/MVP.md` "Definition of Done — free phase" checked rule by rule
 
 | Rule | Verdict |
 | --- | --- |
 | App runs on a physical device via App Store Expo Go (SDK 54) | **Not met — needs you.** Everything checkable from here says yes: `expo` resolves to 54.x, `expo-doctor` 18/18, an iOS bundle exports. Nothing has ever been opened on a phone. |
-| Full loop: start timer → finish session → earn fish → merge fish → see streak update | **Built, but only partly demoable.** Timer, session reward and streak are reachable in minutes. **Merge is not** — see the pacing item below. |
+| Full loop: start timer → finish session → earn fish → merge fish → see streak update | **Built, and now fully demoable.** Timer, session reward and streak are reachable in minutes. Merge was the gap — six hours of real focus — and the debug panel closes it: Spawn ×3 then Cap all fish makes a merge legal immediately, through the real `mergeFish`. |
 | Leaving early visibly penalizes the pet, and recovery on the next session is visible | **Built; "visibly" is phone-only.** The rule, the 8s grace, the desaturation, the slowed tail wag and the wince are all real and tested. Whether grey-and-sluggish *reads* as "your fish is unwell" is item 4 on the checklist. |
-| Shop/paywall UX is fully demoable against the mock entitlement provider | **Met for the UX; two honest caveats.** Buying, failing, retrying, the locked treatment, the unlock animation and the active-species toggle are all genuinely demoable and persist across a restart. But restore is a no-op against a store-backed mock, and a purchase has no visible consequence anywhere outside the Shop row. |
-| This is the checkpoint to decide whether the app is worth paying to publish | **Reached, but weakened.** Two of the eight MVP features — merge and buyable species — cannot realistically be experienced before deciding. Worth fixing before you decide, not after. |
+| Shop/paywall UX is fully demoable against the mock entitlement provider | **Met for the UX; one honest caveat left.** Buying, failing, retrying, the locked treatment, the unlock animation and the active-species toggle are all genuinely demoable and persist across a restart. A purchase now *does* have a visible consequence outside the Shop row — Set active, then Spawn a fry in the debug panel, and the bought species appears in the tank. The caveat that remains is restore, which is a no-op against a store-backed mock. |
+| This is the checkpoint to decide whether the app is worth paying to publish | **Reached, and now genuinely decidable.** All eight MVP features can be experienced in one sitting; merge and buyable species needed the debug panel to get there, and have it. What is left is your judgement of the app, not a gap in it. |
 
 ### Consolidated on-device checklist — everything to test on your phone, all six milestones
 
 This replaces the six per-milestone gates scattered above; they all still stand, but this is the
 list to actually work through, in order, in one sitting. Start with `npx expo start` and scan the
 QR with **App Store Expo Go**.
+
+**This list is now completable in one sitting.** At the M6a review it was not: steps 5 and 7
+needed ~6 hours of real focus time, because merge and a bought species are gated behind real
+pacing. The debug panel in Settings (see the section above) closes exactly that gap — it is why
+those two steps no longer carry a "you cannot really do this today" caveat. Use it for steps 5 and
+7 and **nowhere else**: steps 2, 3 and 4 are testing the real earn/penalty loop, and granting
+yourself fish through them would only prove the debug button works.
 
 1. **It opens at all** (M0). All five tabs load: Focus, Aquarium, Stats, Shop, Settings. The
    first-launch onboarding appears, scrolls cleanly on your device, and does **not** come back on
@@ -570,8 +656,13 @@ QR with **App Store Expo Go**.
    than 8 seconds**, come back: the session abandons, a fish goes grey and sluggish and flinches.
    Complete the next session and watch it recover. Separately confirm a Control Center swipe-down
    and a quick lock/unlock (under 8s) do **not** trigger it.
-5. **The merge sequence lands** (M3). See the caveat below — reaching this legitimately takes
-   ~6 hours of real focus time.
+5. **The merge sequence lands** (M3). **No longer a 6-hour wait — this is what the debug panel is
+   for.** In Settings, tap "Spawn a … fry" three times, then "Cap all fish (max XP)". Go to the
+   Aquarium: three capped Fry, all tappable. Select all three and Merge. Watch the converge →
+   burst → reveal sequence and judge whether it reads as satisfying — that is the *only* thing
+   this step is asking, and the merge itself is the real `mergeFish`, not a debug shortcut. Then
+   try an invalid selection (two fish, or a mix of stages) and confirm the Merge button stays
+   disabled rather than erroring.
 6. **Stats and Settings read correctly** (M5). Stats with a real week of data and with an empty
    history; the five-tab bar is not crowded. Then the one M5 check nothing else can make: set
    Reduce Motion to **off** while the iOS accessibility setting is **on**, and confirm full tank
@@ -581,6 +672,16 @@ QR with **App Store Expo Go**.
    failure and confirm the error reads sensibly and the row recovers. Tap "Set active", then
    force-quit and reopen: both the unlock and the active species survive. Tap "Restore
    purchases" — but see the honest caveat below before reading anything into it.
+   **Then actually see what you bought** — this also used to be unreachable. With Golden Koi set
+   active, go to Settings and tap "Spawn a Golden Koi fry" (the button names the species the store
+   will really hatch), then open the Aquarium: a gold fish, swimming next to the starter Tetras.
+   That is MVP feature 8 demonstrated rather than asserted, and it is the second thing the debug
+   panel exists for.
+8. **The debug panel itself behaves** (post-M6a). Settings scrolls far enough to reach it and all
+   five of its buttons are tappable — the card is tall, and this is the layout most likely to
+   clip on a smaller phone. Confirm it is unmistakably marked as debug-only, and that after using
+   it the Stats screen still shows only sessions you actually completed: granting XP must never
+   move focus time, sessions, or the streak.
 
 ### Known and accepted limitations at the close of M6a
 
@@ -608,16 +709,19 @@ QR with **App Store Expo Go**.
   per-species, matching the per-row UI. Real IAP SDKs generally reject a second concurrent
   purchase; whether to serialize globally is a real-provider question, not something to invent
   against a mock.
-- **The gate is not really decidable yet, and this is the biggest thing on this list.** Buying a
-  species changes the Shop row and nothing else you can see. `activeSpeciesId` only takes effect
-  when a **new Fry hatches**, and the M3 spawn rule hatches one only when every existing fish is
-  capped — 120 XP at 1 XP/minute, so **two hours of focus per fish, and about six hours before a
-  Fry→Juvenile merge is reachable at all.** That means the two headline things you are being asked
-  to spend $99 on the strength of — the merge mechanic (MVP feature 4) and species you can buy
-  (MVP feature 8) — are both effectively unreachable in a demo session. The clean fix is a
-  debug-only affordance in Settings (grant XP / spawn a fish / cap all fish), next to the existing
-  reset action; the alternative is temporarily lowering `GROWTH.xpPerStage`, which is a
-  one-constant change but conflates "demo pacing" with "real pacing". **Needs your call.**
+- ~~**The gate is not really decidable yet, and this is the biggest thing on this list.**~~
+  **Resolved by the debug panel** — you chose the debug affordance over retuning `GROWTH`, and it
+  is built. Merge and buyable species are both reachable in under a minute now (see the debug
+  panel section above and checklist steps 5 and 7). The underlying pacing is *unchanged and still
+  a live design question*: 120 XP at 1 XP/minute is still two hours of real focus per fish and 45
+  completed sessions to an Elder. The debug panel deliberately does not answer that — it only
+  stops the pacing from blocking the $99 decision. **Judge the pacing after you have used the app
+  for real, not from the debug buttons.**
+- **The debug panel must be removed or gated before any EAS build submission.** It is a
+  `TODO` in two places (`SettingsScreen.tsx`'s JSX, `useAppStore.ts`'s action block) and it is a
+  hard M6b/M7 blocker, not a nice-to-have: three buttons that hand out fish would ship to real
+  users otherwise. Gating on `__DEV__` is the cheap version; deleting it is the honest one, since
+  by then the pacing question should have been answered on its own terms.
 - **Cross-species merging is rejected, and now it is observable.** `evaluateMerge` requires
   same-species, which was a defensive default when there was one species (M3) and is a real
   product question now that there are three: a user with two Koi Fry and one Tetra Fry cannot
