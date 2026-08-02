@@ -49,6 +49,21 @@ babel plugin), `@shopify/react-native-skia`, `zustand`, `@react-native-async-sto
 - [ ] Local notification scheduled at `endsAt`, cancelled on pause/reset
 - [ ] Demo: start a 25-min timer, background the app, return — time is correct, notification fires
 
+> **A 3D aquarium alternative was explored and is parked.** Prompted by Forest's 3D trees, the
+> branch `explore/3d-aquarium` holds a working `expo-gl` + `three` + `react-three-fiber`
+> prototype (three tank shapes, up to 40 fish) and the full write-up in
+> `docs/3D_AQUARIUM_REPORT.md` (that file lives on the branch, not on `main`).
+>
+> Headline: **3D is feasible and does not break Expo Go** — `expo-gl` is a bundled Expo Go module
+> on SDK 54, so the free M0–M6a plan survives. It is nonetheless **recommended for deferral to
+> v2**, because a new fish species costs hours as a 2D parameter record and days as a modelled,
+> rigged 3D asset — and selling species is the business model. Secondary costs: +44% JS bundle,
+> animation moves from the UI thread to the JS thread, and `expo-gl` rides Apple's deprecated
+> OpenGL ES while Skia is on Metal.
+>
+> **M2 below is unchanged.** Revisit the 3D option at the M6a decision gate.
+> Browsable version: https://claude.ai/code/artifact/50773e34-7db6-46ac-b803-6a5fb4dffe93
+
 ## M2 — Pet/zoo core + tank rendering
 
 - [ ] Data model: `Species`, `Stage`, `Fish { id, speciesId, stage, xp, bornAt, health }`

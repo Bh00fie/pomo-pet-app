@@ -1,10 +1,56 @@
 # Project Context
 
-## Status: PLANNING ONLY — no code has been written yet
+## Status: M0 scaffolded — building has started
 
-This repo currently contains planning documents only. Do not scaffold the Expo project or write
-app code until the user explicitly says to start building — see `docs/PLAN.md` for the agreed
-sequence.
+The Expo app exists on `main` and builds. `docs/PLAN.md` is the milestone sequence; M1 (timer
+engine) is the next thing to write.
+
+### Current repo state (2026-08-02)
+
+- `main` — Expo SDK 54 app. `app/` holds Expo Router routes only (thin re-exports); everything
+  real is under `src/{config,features,store,anim,ui,theme}`. Zustand + AsyncStorage `persist`
+  with `SCHEMA_VERSION` and a migration runner wired in from commit one
+  (`src/store/migrations.ts`). Feature screens are labelled placeholders, not implementations.
+- Verified: `npx tsc --noEmit` clean, `npx expo-doctor` 18/18, `npx expo export --platform ios`
+  succeeds (3.81 MB Hermes bundle), `expo --version` resolves to 54.x.
+- **Not verified**: the app has never been opened in App Store Expo Go on a physical device. That
+  is the last M0 gate and it needs the user's phone. Do not mark M0 done until they confirm it.
+- `explore/3d-aquarium` — a parallel spike, deliberately **not merged and with no PR open**.
+  See "3D exploration" below.
+
+### 3D exploration (parked, pending the user's decision)
+
+Prompted by Forest's 3D trees. The branch holds a working `expo-gl` + `three` +
+`@react-three/fiber` prototype — three tank shapes (box / bowl / cylinder) driven by data, closed-
+form swim paths, up to 40 fish — plus `docs/3D_AQUARIUM_REPORT.md`.
+
+Conclusion: **3D works and does not cost Expo Go** (`expo-gl` is a bundled Expo Go module on SDK
+54, no dev client needed), but it is **recommended for deferral to v2**. The decisive reason is
+marginal cost per species SKU — hours as a 2D parameter record, days as a modelled/rigged 3D
+asset — in an app that monetises by selling species. Also: +44% JS bundle (3.81 → 5.49 MB),
+`react-three-fiber`'s render loop is on the JS thread where Skia + Reanimated worklets are on the
+UI thread, and `expo-gl` renders through `EAGLContext`/`CAEAGLLayer` (OpenGL ES, deprecated by
+Apple in iOS 12) while Skia is on Metal.
+
+**Do not switch the MVP to 3D.** The committed 2D Skia direction stands; revisit at the M6a gate.
+
+### Visual review
+
+`docs/previews/` (on the `explore/3d-aquarium` branch) holds self-contained HTML preview cards —
+the three live tank shapes, the verdict scorecard, and the five app screens — each with a
+`<!-- @dsCard group="..." -->` first line. `node docs/previews/build.mjs` rebuilds them from
+`docs/previews/src/`. Published for browsing at
+https://claude.ai/code/artifact/50773e34-7db6-46ac-b803-6a5fb4dffe93
+
+**No Claude Design / DesignSync project was created** — the DesignSync tool was not available in
+the environment where this work ran, so the previews were built as portable HTML instead. They are
+already shaped for DesignSync (`@dsCard` headers, no external requests) if the tool becomes
+available later.
+
+### Commit convention
+
+**Do not add AI/Claude co-author attribution to commits.** No `Co-Authored-By` trailers on this
+project — the user has asked for this explicitly.
 
 ## What this is
 
@@ -20,6 +66,8 @@ App name is a placeholder ("Pomo Pet") — rename throughout once a real name is
 - `docs/PLAN.md` — step-by-step build sequence, from account setup to App Store launch
 - `docs/FUTURE_FEATURES.md` — everything else discussed (leaderboards, Health integration, Watch
   app, alternate app ideas) — parked until after MVP ships
+- `docs/3D_AQUARIUM_REPORT.md` — **on the `explore/3d-aquarium` branch only.** The 3D feasibility
+  study and its recommendation
 
 ## Decided constraints
 

@@ -53,6 +53,18 @@ src/theme/           colors, spacing, typography tokens
   Apple Health integration, Watch app, alternate app concepts) — parked until after MVP ships
 - [`CLAUDE.md`](CLAUDE.md) — context file for AI-assisted development on this repo
 
+## Explorations
+
+`explore/3d-aquarium` is a parked spike (not merged, no PR) that tested whether the aquarium
+should be real 3D, Forest-style, instead of the planned 2D Skia fish. It contains a working
+`expo-gl` + `three` prototype with three purchasable tank shapes, and `docs/3D_AQUARIUM_REPORT.md`.
+
+Short version: 3D works and does **not** cost Expo Go compatibility, but it is recommended for
+deferral to v2 — a new fish species costs hours as a 2D parameter record and days as a rigged 3D
+asset, and selling species is the business model. Revisit at the M6a gate.
+
+[Browse the visual review →](https://claude.ai/code/artifact/50773e34-7db6-46ac-b803-6a5fb4dffe93)
+
 ## Monetization
 
 IAP unlocks for additional pet species/biomes on top of a free base app with one starter species.
