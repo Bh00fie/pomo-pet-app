@@ -176,6 +176,47 @@ describe('penalizeAbandonedSession (docs/PLAN.md M4, updated for the reward rear
   });
 });
 
+describe('sick-fish recovery through the store (docs/MVP.md feature 5)', () => {
+  it('a completed session heals the fish the previous abandon sickened, and hatches a new one', () => {
+    useAppStore.getState().awardSessionCompletion(SHORT_SESSION_MS, 1_700_000_000_000);
+    const sickenedId = useAppStore.getState().fish[0].id;
+    useAppStore.getState().penalizeAbandonedSession(1_700_000_100_000);
+    expect(useAppStore.getState().fish.find((f) => f.id === sickenedId)?.health).toBe('sick');
+
+    useAppStore.getState().awardSessionCompletion(SHORT_SESSION_MS, 1_700_000_200_000);
+
+    const { fish } = useAppStore.getState();
+    expect(fish).toHaveLength(2);
+    expect(fish.find((f) => f.id === sickenedId)?.health).toBe('healthy');
+  });
+
+  it('heals one sick fish per completed session, not all of them at once', () => {
+    useAppStore.setState({
+      fish: [
+        { id: 'old-sick', speciesId: STARTER_SPECIES_ID, stage: 'fry', bornAt: 1000, health: 'sick' },
+        { id: 'new-sick', speciesId: STARTER_SPECIES_ID, stage: 'fry', bornAt: 2000, health: 'sick' },
+      ],
+    });
+
+    useAppStore.getState().awardSessionCompletion(SHORT_SESSION_MS, 1_700_000_000_000);
+
+    const { fish } = useAppStore.getState();
+    expect(fish.find((f) => f.id === 'new-sick')?.health).toBe('healthy');
+    expect(fish.find((f) => f.id === 'old-sick')?.health).toBe('sick');
+  });
+
+  it('the debug hatch actions cure nothing — recovery stays exclusive to a real completed session', () => {
+    useAppStore.setState({
+      fish: [{ id: 'sick', speciesId: STARTER_SPECIES_ID, stage: 'fry', bornAt: 1000, health: 'sick' }],
+    });
+
+    useAppStore.getState().debugHatchFry(1_700_000_000_000);
+    useAppStore.getState().debugHatchJuvenile(1_700_000_100_000);
+
+    expect(useAppStore.getState().fish.find((f) => f.id === 'sick')?.health).toBe('sick');
+  });
+});
+
 describe('recordManualAbandon (M5-review fix)', () => {
   it('increments abandonedSessions without touching fish health, unlike the auto-abandon path', () => {
     useAppStore.getState().awardSessionCompletion(SHORT_SESSION_MS, 1_700_000_000_000);

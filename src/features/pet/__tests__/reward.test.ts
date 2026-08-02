@@ -1,12 +1,18 @@
 import { REWARDS } from '@/config';
 import { GOLDEN_KOI_SPECIES_ID, INDIGO_BETTA_SPECIES_ID, STARTER_SPECIES_ID, type Fish } from '../model';
+import { applyPenalty } from '../penalty';
 import {
   applySessionReward,
   classifySessionLength,
+  cureOneSickFish,
   hatchFish,
   pickRandomSpeciesId,
   stageForSessionLength,
 } from '../reward';
+
+function fishAt(id: string, bornAt: number, health: 'healthy' | 'sick'): Fish {
+  return { id, speciesId: STARTER_SPECIES_ID, stage: 'fry', bornAt, health };
+}
 
 const MS_PER_MINUTE = 60_000;
 
@@ -99,6 +105,135 @@ describe('hatchFish', () => {
     expect(result.fish).toHaveLength(2);
     expect(result.fish[0]).toBe(existing);
     expect(result.fish[1].id).toBe('fresh');
+  });
+});
+
+describe('cureOneSickFish (docs/MVP.md feature 5 — "recovers on the next completed session")', () => {
+  it('is a no-op on an empty collection, returning the same array reference', () => {
+    const input: Fish[] = [];
+    const result = cureOneSickFish(input);
+    expect(result.curedFishId).toBeNull();
+    expect(result.fish).toBe(input);
+  });
+
+  it('is a no-op when nothing is sick, returning the same array reference', () => {
+    const input = [fishAt('a', 1000, 'healthy'), fishAt('b', 2000, 'healthy')];
+    const result = cureOneSickFish(input);
+    expect(result.curedFishId).toBeNull();
+    expect(result.fish).toBe(input);
+  });
+
+  it('heals the sick fish', () => {
+    const result = cureOneSickFish([fishAt('a', 1000, 'sick')]);
+    expect(result.curedFishId).toBe('a');
+    expect(result.fish[0].health).toBe('healthy');
+  });
+
+  it('heals exactly one fish per call — the most recently hatched sick one, mirroring applyPenalty', () => {
+    const result = cureOneSickFish([
+      fishAt('oldest-sick', 1000, 'sick'),
+      fishAt('newest-sick', 3000, 'sick'),
+      fishAt('newest-healthy', 4000, 'healthy'),
+    ]);
+
+    expect(result.curedFishId).toBe('newest-sick');
+    expect(result.fish.find((f) => f.id === 'newest-sick')!.health).toBe('healthy');
+    // The older sick fish stays sick: one abandon sickens one fish, one session cures one fish.
+    expect(result.fish.find((f) => f.id === 'oldest-sick')!.health).toBe('sick');
+  });
+
+  it('ignores a healthier-but-newer fish rather than skipping the cure entirely', () => {
+    // Guards the "look at the newest fish, cure it if sick" mis-implementation, which would
+    // leave the sick fish sick forever whenever a healthy fish is newer.
+    const result = cureOneSickFish([fishAt('sick', 1000, 'sick'), fishAt('healthy', 9000, 'healthy')]);
+    expect(result.curedFishId).toBe('sick');
+  });
+
+  it('breaks a bornAt tie toward the later array entry, same rule as applyPenalty', () => {
+    const result = cureOneSickFish([fishAt('first', 5000, 'sick'), fishAt('second', 5000, 'sick')]);
+    expect(result.curedFishId).toBe('second');
+  });
+
+  it('does not mutate its input', () => {
+    const input = [fishAt('a', 1000, 'sick')];
+    cureOneSickFish(input);
+    expect(input[0].health).toBe('sick');
+  });
+});
+
+describe('applySessionReward — sick-fish recovery (docs/MVP.md feature 5)', () => {
+  const idFactory = () => 'new-fish';
+
+  it('cures a sick fish as well as hatching, so the penalty loop is not one-way', () => {
+    const result = applySessionReward({
+      fish: [fishAt('sickened', 1000, 'sick')],
+      focusMs: 25 * MS_PER_MINUTE,
+      now: 5000,
+      idFactory,
+      activeSpeciesId: STARTER_SPECIES_ID,
+      ownedSpeciesIds: [STARTER_SPECIES_ID],
+    });
+
+    expect(result.curedFishId).toBe('sickened');
+    expect(result.fish).toHaveLength(2);
+    expect(result.fish.find((f) => f.id === 'sickened')!.health).toBe('healthy');
+  });
+
+  it('cures on a long session too, not just a short one', () => {
+    const result = applySessionReward({
+      fish: [fishAt('sickened', 1000, 'sick')],
+      focusMs: REWARDS.longSessionThresholdMinutes * MS_PER_MINUTE,
+      now: 5000,
+      idFactory,
+      activeSpeciesId: STARTER_SPECIES_ID,
+      ownedSpeciesIds: [STARTER_SPECIES_ID],
+    });
+
+    expect(result.length).toBe('long');
+    expect(result.curedFishId).toBe('sickened');
+    expect(result.fish.find((f) => f.id === 'sickened')!.health).toBe('healthy');
+  });
+
+  it('reports a null curedFishId when nothing was sick', () => {
+    const result = applySessionReward({
+      fish: [fishAt('fine', 1000, 'healthy')],
+      focusMs: 25 * MS_PER_MINUTE,
+      now: 5000,
+      idFactory,
+      activeSpeciesId: STARTER_SPECIES_ID,
+      ownedSpeciesIds: [STARTER_SPECIES_ID],
+    });
+    expect(result.curedFishId).toBeNull();
+  });
+
+  it('never cures the fish it just hatched — that one was already healthy', () => {
+    const result = applySessionReward({
+      fish: [],
+      focusMs: 25 * MS_PER_MINUTE,
+      now: 5000,
+      idFactory,
+      activeSpeciesId: STARTER_SPECIES_ID,
+      ownedSpeciesIds: [STARTER_SPECIES_ID],
+    });
+    expect(result.curedFishId).toBeNull();
+    expect(result.hatchedFishId).toBe('new-fish');
+  });
+
+  it('a penalty followed by a completed session leaves the collection fully healthy again', () => {
+    // The round trip docs/MVP.md's on-device checklist step 4 asks the user to watch for.
+    const sickened = applyPenalty({ fish: [fishAt('a', 1000, 'healthy')] });
+    expect(sickened.fish[0].health).toBe('sick');
+
+    const recovered = applySessionReward({
+      fish: sickened.fish,
+      focusMs: 25 * MS_PER_MINUTE,
+      now: 2000,
+      idFactory,
+      activeSpeciesId: STARTER_SPECIES_ID,
+      ownedSpeciesIds: [STARTER_SPECIES_ID],
+    });
+
+    expect(recovered.fish.every((f) => f.health === 'healthy')).toBe(true);
   });
 });
 

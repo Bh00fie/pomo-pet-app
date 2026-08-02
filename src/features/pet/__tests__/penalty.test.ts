@@ -31,6 +31,15 @@ describe('applyPenalty', () => {
     expect(result.sickenedFishId).toBe('newer');
   });
 
+  it('breaks a bornAt tie toward the later array entry — fish are only ever appended, so that is '
+    + 'the more recently hatched one', () => {
+    // Reachable: two debug hatches, or a hatch and a merge, landing in the same millisecond.
+    const first = createFish(STARTER_SPECIES_ID, 5000, 'first');
+    const second = createFish(STARTER_SPECIES_ID, 5000, 'second');
+
+    expect(applyPenalty({ fish: [first, second] }).sickenedFishId).toBe('second');
+  });
+
   it('is idempotent when the target is already sick, returning the same fish array reference', () => {
     const alreadySick: Fish = { ...createFish(STARTER_SPECIES_ID, 0, 'sick-fish'), health: 'sick' };
     const input = [alreadySick];

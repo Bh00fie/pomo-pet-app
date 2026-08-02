@@ -17,8 +17,15 @@ export type { Fish, FishHealth, SpeciesId, Stage, Species, StageVisualParams } f
 export { buildFishGeometry } from './geometry';
 export type { FishGeometry, FinShape, FinSegment, Point, StripeBand } from './geometry';
 export { hslToHex } from './color';
-export { applySessionReward, classifySessionLength, stageForSessionLength, hatchFish, pickRandomSpeciesId } from './reward';
-export type { SessionRewardInput, SessionRewardResult, SessionLength, HatchResult } from './reward';
+export {
+  applySessionReward,
+  classifySessionLength,
+  cureOneSickFish,
+  stageForSessionLength,
+  hatchFish,
+  pickRandomSpeciesId,
+} from './reward';
+export type { SessionRewardInput, SessionRewardResult, SessionLength, HatchResult, CureResult } from './reward';
 export { evaluateMerge, isMergeEligibleStage } from './merge';
 export type { MergeInput, MergeResult, MergeSuccess, MergeRejection, MergeRejectionReason } from './merge';
 export { applyPenalty } from './penalty';

@@ -36,7 +36,10 @@ export interface PenaltyResult {
 export function applyPenalty(input: PenaltyInput): PenaltyResult {
   if (input.fish.length === 0) return { fish: input.fish, sickenedFishId: null };
 
-  const target = input.fish.reduce((latest, f) => (f.bornAt > latest.bornAt ? f : latest));
+  // `>=`, not `>`: two fish can share a `bornAt` (two debug hatches, or a hatch and a merge, in
+  // the same millisecond), and fish are only ever appended — so the later entry is the more
+  // recent one and `>` would pick the older of the pair. Same tie rule as `cureOneSickFish`.
+  const target = input.fish.reduce((latest, f) => (f.bornAt >= latest.bornAt ? f : latest));
   if (target.health === 'sick') return { fish: input.fish, sickenedFishId: target.id };
 
   const fish = input.fish.map((f) => (f.id === target.id ? { ...f, health: 'sick' as const } : f));

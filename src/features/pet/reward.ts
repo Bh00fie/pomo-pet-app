@@ -13,8 +13,13 @@
  *   - **Long** (>= the threshold) hatches a **Juvenile** of a species drawn uniformly at random
  *     from *every* species the user owns (`entitlements.unlockedSpeciesIds`) — independent of
  *     which one is active, so owning more species specifically matters for long sessions.
- * Merging (`merge.ts`) is still the only way any fish crosses a stage boundary from there — this
- * file only ever produces a fresh Fry or Juvenile, never touches an existing fish.
+ * Merging (`merge.ts`) is still the only way any fish crosses a stage boundary from there.
+ *
+ * The one existing fish a completed session *does* touch is a sick one: `docs/MVP.md` feature 5
+ * says the leave-early penalty "recovers on the next completed session", and that recovery used
+ * to live inside the deleted `distributeXp` (being picked as a grow target cured a fish). Nothing
+ * grows anymore, so the cure is explicit here instead — see `cureOneSickFish`. Without it the
+ * accountability loop is one-way: a fish can be made sick and never get better.
  */
 import { REWARDS, STAGES } from '@/config';
 import { createFishAtStage, STARTER_SPECIES_ID, type Fish, type SpeciesId, type Stage } from './model';
@@ -82,6 +87,38 @@ export function hatchFish(
   return { fish: [...fish, hatched], hatched };
 }
 
+export interface CureResult {
+  fish: Fish[];
+  /** Id of the fish cured, or `null` if none were sick. */
+  curedFishId: string | null;
+}
+
+/**
+ * Heals exactly one sick fish — the most recently hatched one — and is the mirror image of
+ * `penalty.ts`'s `applyPenalty`, which sickens the most recently hatched fish. One abandon makes
+ * one fish sick; one completed session makes one fish well again, so the loop is symmetric and a
+ * user can always dig themselves back out. Ties on `bornAt` go to the later entry in the array
+ * (fish are only ever appended), same rule as `applyPenalty`. Never mutates its input, and
+ * returns the same array reference when there is nothing to cure.
+ *
+ * Deliberately *not* wired into `hatchFish`: the debug panel hatches through that primitive, and
+ * a debug button must never hand out a recovery the user did not earn (CLAUDE.md's "no
+ * accountability bypass" invariant for the debug actions).
+ */
+export function cureOneSickFish(fish: Fish[]): CureResult {
+  let target: Fish | null = null;
+  for (const f of fish) {
+    if (f.health === 'sick' && (target === null || f.bornAt >= target.bornAt)) target = f;
+  }
+  if (target === null) return { fish, curedFishId: null };
+
+  const cured = target;
+  return {
+    fish: fish.map((f) => (f.id === cured.id ? { ...f, health: 'healthy' as const } : f)),
+    curedFishId: cured.id,
+  };
+}
+
 export interface SessionRewardInput {
   fish: Fish[];
   /** Ms of focus actually served this session (use `elapsedMs` from the timer machine, not the
@@ -109,6 +146,8 @@ export interface SessionRewardResult {
   /** Species the hatched fish ended up as. */
   speciesId: SpeciesId;
   length: SessionLength;
+  /** Id of the sick fish this session cured, or `null` if none were sick (docs/MVP.md feature 5). */
+  curedFishId: string | null;
 }
 
 /**
@@ -125,6 +164,10 @@ export function applySessionReward(input: SessionRewardInput): SessionRewardResu
   const speciesId =
     length === 'long' ? pickRandomSpeciesId(ownedSpeciesIds, input.random) : activeSpeciesId;
 
-  const { fish, hatched } = hatchFish(input.fish, stage, speciesId, input.now, input.idFactory);
-  return { fish, hatchedFishId: hatched.id, speciesId, length };
+  // Cure before hatching, over the pre-hatch collection: a freshly hatched fish is always healthy,
+  // so it could never be the cure target anyway, but doing it in this order keeps that true by
+  // construction rather than by coincidence.
+  const cured = cureOneSickFish(input.fish);
+  const { fish, hatched } = hatchFish(cured.fish, stage, speciesId, input.now, input.idFactory);
+  return { fish, hatchedFishId: hatched.id, speciesId, length, curedFishId: cured.curedFishId };
 }
