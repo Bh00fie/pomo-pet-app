@@ -196,10 +196,18 @@ The remaining gate needs your phone: earn enough fish to fill a merge, tap three
 watch the converge/burst/reveal sequence land.
 
 > ~~**Open question carried into M4 — overflow XP is discarded at the stage cap.**~~
-> **Resolved at M4** — you chose to carry the remainder rather than discard it. `applySessionReward`
-> now grows the target to exactly its cap and re-feeds the leftover through the same
-> grow-or-spawn rule, so a fish at 110/120 earning 25 XP lands on 120 and the other 15 starts a
-> new Fry. Implemented in `reward.ts` (`distributeXp`) and verified below.
+> **Resolved at M4** — you chose to carry the remainder rather than discard it — and then made
+> **moot post-M6a**, along with the grow-or-spawn rule it extended. `Fish.xp`, `addXp` and
+> `distributeXp` no longer exist; see the reward-rearchitecture section near the end of this file.
+> The half of this milestone that survives untouched is the *merge* rule: `evaluateMerge` only ever
+> compared stage and species, never XP, so it needed no changes at all.
+
+> **The first bullet above is superseded.** Sessions no longer grow a fish's XP within its stage —
+> every completed session hatches one new fish outright, and its *duration* decides whether that is
+> a Fry or a Juvenile. Merging is still the only way a fish crosses a stage boundary, so the scope
+> ambiguity `MVP.md` raised is resolved the same way, just with "sessions hatch" in place of
+> "sessions grow". Everything else recorded in this section — the merge rule, the atomic
+> `mergeFish`, the animation sequence, the three teardown fixes — is unchanged and still current.
 
 ## M4 — Accountability + streaks  [~] complete and unit-tested, awaiting the on-device demo
 
@@ -228,7 +236,12 @@ note at the end of this section. What is left is phone-only: the two gates below
       beside `useSessionReward`, applies it off a `lastPenaltyToken` counter (not
       `status === 'abandoned'`, which a manual "Give up" also produces). Recovery is in
       `reward.ts`: being selected as a completed session's grow target cures a fish, at every
-      link of an overflow chain, not just the first
+      link of an overflow chain, not just the first.
+      **Post-M6a: both halves of this moved.** The penalty now sickens the most recently hatched
+      fish (there is no "the fish this session would have grown" any more), and recovery is an
+      explicit `cureOneSickFish` in `reward.ts` rather than a side effect of growing — the
+      rearchitecture initially dropped the cure altogether, which is the one real bug its review
+      caught. See the reward-rearchitecture section near the end of this file
 - [x] Daily streak tracking, local-date based, unit-tested against DST/timezone edge cases.
       `src/features/streak/streak.ts` is pure and keyed on a `YYYY-MM-DD` **local** calendar date
       (never a UTC timestamp or a `toISOString()` slice, which shifts the date near midnight west
@@ -329,11 +342,11 @@ Deliberate, decided, and *not* bugs to be silently fixed later — revisit each 
   a manual give-up does not increment `stats.abandonedSessions` either, so that counter
   under-reports by its own name. Both are part of the same question; change them together or not
   at all.
-- **A user whose fish are all capped cannot be penalized.** `applyPenalty` reuses the reward
-  rule's "first fish with room" selection, so when every fish is waiting on a merge there is no
-  target and leaving early is free. Symmetric with the reward side (that user earns nothing from a
-  completed session either), but a real late-game gap. Fixing it means sickening a capped fish
-  anyway, or the most recently grown one.
+- ~~**A user whose fish are all capped cannot be penalized.**~~ **Resolved post-M6a, as a side
+  effect rather than deliberately.** Stage caps no longer exist, so "every fish is capped" is not a
+  state any more; `applyPenalty` targets the most recently hatched fish and the only no-op left is
+  an empty collection. That last case is reachable and correct — a user who abandons their very
+  first session has nothing to sicken, and the abandonment is still counted in `stats`.
 - **Force-quitting while backgrounded escapes the penalty entirely.** `useTimerStore` is transient
   by design (M1), so `backgroundedAt` and the in-flight session die with the process; relaunching
   finds an idle timer and nothing to penalize. Same root cause as "a completed session is lost if
@@ -592,30 +605,29 @@ all three knobs are in `src/config/index.ts` and changing them needs no code cha
 
 A **"⚠ DEBUG — TESTING ONLY, NOT FOR SHIP"** card sits at the bottom of Settings, below the reset
 card, styled distinctly on purpose (dashed amber border, tinted background) so it can never be
-mistaken for a normal feature. Three actions:
+mistaken for a normal feature.
 
-- **Grant XP (+120 / +360 / +1000)** → `useAppStore.debugGrantXp`, which calls the *same*
-  `distributeXp` from `reward.ts` that `applySessionReward` calls. Same first-fish-with-room
-  selection, same `addXp` clamp, same M4 overflow chain. Note what that means, and the panel says
-  so on screen: the spawn branch is the recursion's base case and absorbs **all** remaining XP into
-  a single Fry, so +1000 XP on an empty tank is one capped fish, not eight.
-- **Cap all fish** → `debugCapAllFish`, `addXp(f, GROWTH.xpPerStage)` over the collection — the
-  same clamp, not a direct `xp =` write. Deliberately does **not** change `health`: capping a fish
-  is not a way to cure a sick one, which stays exclusive to being picked as a real grow target.
-- **Spawn a fry** → `debugSpawnFish`, the same `createFish` primitive the M3 spawn branch uses,
-  with the species resolved by the shared `resolveSpawnSpeciesId` helper (extracted from
-  `awardSessionCompletion`, so active-species resolution is not duplicated a third time). It is
-  the one action that deliberately departs from real behaviour: it hatches unconditionally rather
-  than only when every fish is capped — that is the point, since it is what makes a purchased
-  species immediately visible.
+**Its buttons changed with the reward rearchitecture, and the invariant behind them did not.**
+Grant XP and Cap all fish stopped meaning anything the moment XP and stage caps were deleted; the
+panel now has two actions, and both call the same `hatchFish` primitive a real completed session
+calls, never a simulation of it:
 
-**No accountability bypass.** None of the three touches `stats`, the streak, or `health`. They are
-shortcuts through the reward *distribution* rule, not fake sessions: the panel can hand you fish,
-but it cannot hand you a streak you did not earn or a "focus time" number you did not spend, and
-the Stats screen stays honest while you use it. Pinned by tests on both sides — one asserts
-`debugGrantXp` produces the same fish state as a real `awardSessionCompletion` for the equivalent
-XP, another runs `debugCapAllFish` and then a real `mergeFish` end to end, and a third asserts
-`stats` is byte-identical before and after all three actions fire.
+- **Hatch a `<species>` Fry** → `useAppStore.debugHatchFry`, i.e. exactly what a short real session
+  produces. The species comes from the shared `resolveSpawnSpeciesId` helper and the *label* reads
+  it through the `selectSpawnSpeciesId` selector, so the button can never name a species it would
+  not hand over. Press it `GROWTH.fishPerMerge` times for a mergeable trio — the same job the old
+  "Spawn a fry ×3 then Cap all fish" pair did, in one button instead of two.
+- **Hatch a Juvenile (random species)** → `debugHatchJuvenile`, exactly what a long real session
+  produces, through the same `pickRandomSpeciesId` draw over `entitlements.unlockedSpeciesIds`.
+  This is now the fastest way to see a bought species in the tank.
+
+**No accountability bypass — and there is one more thing it must not do now.** Neither action
+touches `stats`, the streak, or `health`. That last one matters more than it used to: a completed
+session cures a sick fish, so a debug hatch that went through `applySessionReward` instead of
+`hatchFish` would quietly hand out recovery the user did not earn. It goes through the primitive
+precisely so it cannot. The panel can hand you fish, but not a streak, not focus time, and not a
+cure. Pinned by tests on both sides, including one that sickens a fish and then fires both debug
+actions to assert it is still sick.
 
 **Before EAS build submission this card and the three store actions must be removed or gated.**
 There is a `TODO: remove or gate before EAS build submission` on both the JSX and the action block
@@ -657,8 +669,8 @@ yourself fish through them would only prove the debug button works.
    Complete the next session and watch it recover. Separately confirm a Control Center swipe-down
    and a quick lock/unlock (under 8s) do **not** trigger it.
 5. **The merge sequence lands** (M3). **No longer a 6-hour wait — this is what the debug panel is
-   for.** In Settings, tap "Spawn a … fry" three times, then "Cap all fish (max XP)". Go to the
-   Aquarium: three capped Fry, all tappable. Select all three and Merge. Watch the converge →
+   for.** In Settings, tap "Hatch a … Fry" three times. Go to the Aquarium: three Fry, all
+   tappable. Select all three and Merge. Watch the converge →
    burst → reveal sequence and judge whether it reads as satisfying — that is the *only* thing
    this step is asking, and the merge itself is the real `mergeFish`, not a debug shortcut. Then
    try an invalid selection (two fish, or a mix of stages) and confirm the Merge button stays
@@ -673,15 +685,24 @@ yourself fish through them would only prove the debug button works.
    force-quit and reopen: both the unlock and the active species survive. Tap "Restore
    purchases" — but see the honest caveat below before reading anything into it.
    **Then actually see what you bought** — this also used to be unreachable. With Golden Koi set
-   active, go to Settings and tap "Spawn a Golden Koi fry" (the button names the species the store
+   active, go to Settings and tap "Hatch a Golden Koi Fry" (the button names the species the store
    will really hatch), then open the Aquarium: a gold fish, swimming next to the starter Tetras.
    That is MVP feature 8 demonstrated rather than asserted, and it is the second thing the debug
-   panel exists for.
-8. **The debug panel itself behaves** (post-M6a). Settings scrolls far enough to reach it and all
-   five of its buttons are tappable — the card is tall, and this is the layout most likely to
-   clip on a smaller phone. Confirm it is unmistakably marked as debug-only, and that after using
-   it the Stats screen still shows only sessions you actually completed: granting XP must never
-   move focus time, sessions, or the streak.
+   panel exists for. Owning a second species also now changes what a *long* session pays out, so
+   tap "Hatch a Juvenile (random species)" a few times and confirm the draw really does vary.
+8. **The debug panel itself behaves** (post-M6a). Settings scrolls far enough to reach it and both
+   of its buttons are tappable — the card is tall, and this is the layout most likely to clip on a
+   smaller phone. Confirm it is unmistakably marked as debug-only, and that after using it the
+   Stats screen still shows only sessions you actually completed: hatching must never move focus
+   time, sessions, or the streak — and must never cure a sick fish.
+
+9. **The pre-session preview and the two hatch tiers agree with reality** (post-M6a reward
+   rearchitecture). On Focus, step the length up through 50 minutes and watch the "YOU'LL HATCH"
+   line flip from "A Fry — `<your species>`" to "A Juvenile — a random species from your
+   collection", and back down again. Then run one short session and one at 50+ and confirm the
+   tank gets exactly what the preview promised. This is also the first honest look at the new
+   pacing: a fish per session is either the right amount of feedback or too much, and only real
+   use answers that.
 
 ### Known and accepted limitations at the close of M6a
 
@@ -853,6 +874,132 @@ than recolors** — the 3D report's decisive reason for deferring to v2 gets str
   only through `ShopScreen.test.tsx`'s `SpeciesSwatch` (whose Skia stub now includes `Rect` and
   `addOval`, so all five rows really do build). The tank renderer itself remains untested — a
   pre-existing gap, but the stripe overlay is the first thing in it with non-trivial composition.
+
+## Post-M6a reward rearchitecture — duration-tiered hatch-on-completion  [~] built, reviewed
+
+Not a milestone. A replacement of the M2–M4 reward model, end to end, and the largest behavioural
+change since M3. It answers the pacing question the debug panel deliberately did **not** answer:
+`GROWTH.xpPerStage` (120) at `GROWTH.xpPerFocusMinute` (1) meant two hours of focus per fish and
+45 completed sessions to an Elder, all of it accumulating into a number the app never showed
+anyone. Three things were wrong with that at once, and they are the reason this is a rewrite rather
+than a retune: **the reward was invisible** (a completed session changed a hidden integer and, four
+sessions out of five, nothing on screen); **the first fish took five sessions**, so a new user's
+first run paid out nothing at all; and **owning a second species changed nothing about what a
+session was worth**, which is a problem for an app whose business model is selling species.
+
+### The rule
+
+Every completed focus session hatches **exactly one brand-new fish, immediately**. Nothing grows,
+and XP no longer exists as a concept anywhere in the codebase. Duration alone picks the tier:
+
+- **Short** (below `REWARDS.longSessionThresholdMinutes`) → a **Fry** of the user's active species,
+  the M6a `settings.activeSpeciesId`, still entitlement-revalidated on every read.
+- **Long** (at or above the threshold — `>=`, the boundary is long) → a **Juvenile** of a species
+  drawn uniformly at random from **every** species the user owns, independent of which is active.
+  That is the deliberate hook: a long session is worth three short ones *and* is the only place
+  owning more species pays out.
+
+**The threshold is 50 minutes, and it is a grid value rather than a computed midpoint.**
+`TIMER.minMinutes`/`maxMinutes` are 5/90, so the true midpoint is 47.5 — not a duration the
+`stepMinutes` (5) stepper can produce. 50 is the nearest value on the grid and it splits the 18
+selectable durations exactly in half: nine short (5–45), nine long (50–90). 45 would have split
+them 8/10.
+
+**Merging is untouched, and that was checked rather than assumed.** `evaluateMerge` only ever
+compared stage and species — it never read `xp` — so it needed no changes and remains the only way
+a fish crosses a stage boundary. `GROWTH.fishPerMerge` is unchanged at 3.
+
+### What was deleted
+
+- [x] `Fish.xp`, `addXp`, `stageProgress`, `isReadyToMerge`, `distributeXp`, `xpForFocusMs`, and
+      `GROWTH.xpPerStage` / `GROWTH.xpPerFocusMinute` — none of which had any remaining purpose.
+      `GROWTH` now holds one constant.
+- [x] **`SCHEMA_VERSION` 4 → 5**, with a migration that drops the dead `xp` field from every
+      persisted fish rather than leaving a number in storage that nothing produces or reads.
+      Destructuring a key that is already absent is a no-op, so a fish predating the field migrates
+      cleanly; non-object entries and a missing `fish` array are both handled.
+- [x] **One hatch primitive.** `hatchFish` in `reward.ts` is the only thing in the app that appends
+      a fish, and both the real session path and the debug panel go through it. Same invariant the
+      debug panel has always had: a shortcut through the real logic, never a parallel copy.
+- [x] **`applyPenalty`'s target selection changed of necessity.** It used to reuse the reward
+      rule's "first fish with room" pick, which no longer exists. It now sickens the **most
+      recently hatched** fish, ties on `bornAt` going to the later array entry since fish are only
+      ever appended. Side effect: the close-of-M4 "a user whose fish are all capped cannot be
+      penalized" gap is gone, because stage caps are gone.
+- [x] **The debug panel's buttons were replaced, not removed** — see the debug-panel section above.
+- [x] **A live pre-session preview on the Focus screen**, next to the length stepper: "A Fry —
+      `<active species>`" or "A Juvenile — a random species from your collection", updating as the
+      stepper moves. It calls the same `classifySessionLength` a real session calls, so it cannot
+      disagree with what actually hatches — and the boundary really does agree, because a completed
+      session's `elapsedMs` is clamped to exactly `durationMs`, which is synced from
+      `settings.workMinutes` while the timer is idle. The long branch deliberately never names a
+      species: it genuinely is not decided until the session completes.
+
+### Found in review
+
+- **The sick-fish cure was deleted with `distributeXp`, and nothing replaced it** (fixed; the one
+  real bug in the change). `docs/MVP.md` feature 5 specifies that a sick fish "recovers on the next
+  completed session", the free-phase Definition of Done lists that recovery as a thing to *see*,
+  and on-device checklist step 4 asks the user to watch it happen. The cure was a single
+  `health: 'healthy'` write inside `distributeXp`'s grow branch, and it went away with the
+  function. Grepping for a healthy write afterwards finds only `createFishAtStage` and `merge.ts`,
+  both of which produce a *new* fish — so a fish sickened once stayed grey and sluggish forever and
+  the accountability loop was one-way. `applySessionReward` now cures exactly one sick fish per
+  completed session, the most recently hatched one, mirroring `applyPenalty` so one abandon costs
+  one fish and one session buys one back. It lives in `applySessionReward` and **not** in
+  `hatchFish`, so the debug panel cannot hand out a recovery the user did not earn. Verified
+  against four mutants (drop the cure, cure every sick fish, only cure when the newest fish happens
+  to be sick, revert the tie-break); each is caught by the intended test.
+- **Four user-visible strings still promised XP growth** (fixed). The end-of-session notification
+  said "Your fish grew", the Focus screen's completed hint said "your fish grew", and onboarding's
+  second card promised "Every completed session grows a fish". On a phone that reads as a bug, not
+  as stale copy. The onboarding card now also mentions that longer sessions hatch bigger fish,
+  which nothing else told a first-launch user.
+- **`applyPenalty` broke a `bornAt` tie toward the *older* fish** (fixed). `reduce` with `>` keeps
+  the first match, and fish are only ever appended, so two hatches landing in the same millisecond
+  — two debug presses, or a hatch and a merge — sickened the earlier of the pair. Now `>=`, matching
+  the new cure rule.
+
+### Checked and confirmed sound
+
+- **The random draw is genuinely random and genuinely tested.** `pickRandomSpeciesId` takes an
+  injectable `random`, so the tests pin exact indices (0, 0.4, 0.999999 → first, middle, last, with
+  the last case covering the run-past-the-end boundary) *and* separately assert that 300 real draws
+  across a 3-species pool produce more than one distinct species. An implementation hardcoded to
+  index 0 fails the second check immediately.
+- **The migration cannot crash on old data.** Destructuring `xp` off a fish that never had it is a
+  no-op; a `null` or non-object entry is returned untouched; an absent `fish` array becomes `[]`,
+  which is what `persist`'s merge would have produced anyway.
+- **Zero fish is a reachable, correct penalty no-op.** A user who abandons their first-ever session
+  has nothing to sicken. The abandonment is still counted in `stats.abandonedSessions`.
+- **The new tests assert against independently-derived values, not the implementation's own
+  formula.** The reward, penalty and migration suites all compare against literal expected fish
+  objects and literal species ids rather than re-deriving them — the failure mode the M4/M5 DST
+  tests and the species pass's fin-split test each hit in turn.
+
+Verified independently on 2026-08-02 after the review: `npm test` → **362 tests, 19 suites, all
+passing** (346 before); `npx tsc --noEmit` clean; `npx expo-doctor` 18/18.
+
+### Flagged, not fixed
+
+- **The pacing swung hard in the other direction, and only real use can judge it.** A fish per
+  session, and a Juvenile — worth three Fry — for any session of 50 minutes or more. Three long
+  sessions produce three Juveniles, i.e. one merge away from an Elder, against 45 sessions before.
+  That is deliberately generous to make the loop legible, but whether it makes the aquarium feel
+  earned or free is exactly the question the old numbers got wrong in the opposite direction. It is
+  one constant (`REWARDS.longSessionThresholdMinutes`) plus the two stage choices in `reward.ts`.
+- **`applyPenalty` is a no-op when the newest fish is already sick, even with healthy fish
+  present.** Repeated abandons cost one fish, not many — arguably right, and symmetric with the
+  one-cure-per-session rule, but it does mean a user who abandons twice in a row is only charged
+  once. Deliberate, and the mirror of the cure; flagging it because it is a behaviour change nobody
+  chose explicitly.
+- **A long session can draw a species that is unlocked but not in the catalog.** The draw pool is
+  `entitlements.unlockedSpeciesIds` verbatim, and the v1→v2 migration deliberately preserves
+  unrecognised stored ids. Not reachable today — the only writers are the Shop and the mock
+  provider, both of which deal in `SPECIES_ORDER` ids — but the *active*-species path has always
+  been re-validated against ownership specifically because a persisted species id is not trusted,
+  and this new path widened the same surface without the same guard. A one-line filter to
+  catalog-known ids would close it; left alone as unreachable rather than added speculatively.
 
 ---
 

@@ -1,7 +1,7 @@
 # Pomo Pet (placeholder name)
 
-A Pomodoro timer for iOS where completed focus sessions earn you "fish" that grow and merge into
-bigger fish, building a personal zoo/aquarium over time. Leave a session early and your pet takes
+A Pomodoro timer for iOS where completed focus sessions hatch "fish" that merge into bigger fish,
+building a personal zoo/aquarium over time. Leave a session early and your pet takes
 the hit — that accountability loop (in the spirit of apps like Forest) is the core retention hook.
 
 ## Status
@@ -27,24 +27,28 @@ Developer Program fee. In short, that checklist is:
    actually visible in the tank (M6a)
 8. The debug panel is reachable, obviously debug-only, and leaves Stats honest
 
-Steps 5 and 7 used to be the problem: at the real growth curve they needed roughly six hours of
-focus time to reach. A **testing-only debug panel** in Settings now fast-forwards them — grant XP,
-cap all fish, spawn a fry — routed through the exact same reward/merge/spawn logic the app itself
-uses, so what you are judging is the real mechanic, not a mock-up. The growth numbers themselves
-were deliberately left alone; the panel is marked for removal before any real build.
+Steps 5 and 7 used to be the problem: under the original XP-accumulation model they needed roughly
+six hours of focus time to reach. That model is gone — see below — and a **testing-only debug
+panel** in Settings makes them instant anyway: "Hatch a Fry" and "Hatch a Juvenile" call the exact
+same hatch primitive a completed session does, so what you are judging is the real mechanic, not a
+mock-up. The panel is marked for removal before any real build.
 
 What that adds up to: start/pause/resume/reset run off an
 absolute-timestamp state machine (`endsAt`, never a decrementing counter), with customizable
-work/break lengths and a local notification scheduled for the end of the session. Finishing a
-focus session grows a fish, drawn procedurally in Skia — body, tail and fins are parametric paths,
-so the three growth stages are parameter sets rather than separate assets — and the whole tank
-animates off a single shared frame clock. Once every fish is capped the next session hatches a new
-one, and XP past a stage cap spills into the next fish instead of evaporating; tap three of the
-same stage and merge them into one of the next stage, with a converge → burst → spring-reveal
-sequence. Leave a focus session backgrounded past an 8-second grace period — for the whole session
-or just past the grace period, it makes no difference now — and it is abandoned and a fish goes
-grey, desaturated and sluggish, until a completed session nurses it back. Consecutive days with a
-completed session build a streak.
+work/break lengths and a local notification scheduled for the end of the session. **Every completed
+focus session hatches exactly one new fish, immediately** — there is no XP and no invisible progress
+bar. How long you focused decides what you get: under 50 minutes hatches a **Fry** of whichever
+species you have active, 50 minutes or more hatches a **Juvenile** of a species drawn at random from
+everything you own, so a long session is worth three short ones *and* is the reason to own more than
+one species. The Focus screen shows which of the two the current duration setting will produce,
+live, next to the length stepper. Fish are drawn procedurally in Skia — body, tail and fins are
+parametric paths, so the three stages are parameter sets rather than separate assets — and the whole
+tank animates off a single shared frame clock. Merging is the only way a fish crosses a stage
+boundary: tap three of the same stage and species and merge them into one of the next stage, with a
+converge → burst → spring-reveal sequence. Leave a focus session backgrounded past an 8-second grace
+period — for the whole session or just past the grace period, it makes no difference now — and it is
+abandoned and your most recently hatched fish goes grey, desaturated and sluggish, until a completed
+session nurses it back. Consecutive days with a completed session build a streak.
 
 M5 fills in everything around that loop: a Stats tab with today's focus time, current streak,
 all-time total and a seven-day bar chart (bucketed by *local* calendar day, so it holds up across a
@@ -56,7 +60,7 @@ and a first-launch explainer of the core loop.
 M6a adds the shop: an `EntitlementProvider` interface shaped after a real IAP SDK, a mock behind
 it that is genuinely async and fails one purchase in ten on purpose, buyable species drawn from the
 same procedural system as the starter rather than as assets, a locked/desaturated preview
-treatment, an unlock animation, and a toggle for which species new fry hatch as. No real money is
+treatment, an unlock animation, and a toggle for which species short sessions hatch. No real money is
 involved anywhere; swapping in RevenueCat at M6b changes one file.
 
 **There are five species now, and they differ in shape, not just hue.** Coral Tetra (starter),
@@ -74,12 +78,13 @@ rather than shipping 3D assets.
 **Two honest caveats before the decision gate.** "Restore purchases" is close to a no-op — the
 mock reads ownership out of the same local store the result is reconciled into, so it cannot change
 anything, and the flow exists for M6b rather than for today; a restore that "works" on your phone
-is evidence of nothing. And the growth curve is still the real one: roughly two hours of focus to
-cap a fish, 45 completed sessions to an Elder. The debug panel makes those mechanics *testable*
-without waiting; it deliberately does not answer whether the pacing is right. Judge that from real
-use. Both are written up in [`docs/PLAN.md`](docs/PLAN.md).
+is evidence of nothing. And the pacing is now the opposite question to the one it used to be: nine
+short sessions get you a Juvenile the slow way, three long ones get you an Elder's worth of
+Juveniles, and a first fish arrives on session one instead of after five. Whether that is too
+generous is a judgement to make from real use, not from the debug panel. Both are written up in
+[`docs/PLAN.md`](docs/PLAN.md).
 
-Everything machine-checkable passes: 346 unit tests across 19 suites, type-check, `expo-doctor`
+Everything machine-checkable passes: 362 unit tests across 19 suites, type-check, `expo-doctor`
 18/18, and a 4.73 MB iOS bundle export. Everything still open needs a real iPhone.
 
 ## Running it
@@ -107,7 +112,7 @@ npm run doctor
 
 ```
 app/                 Expo Router routes — thin re-exports only
-src/config/          tunable constants (timer lengths, growth curve, grace periods)
+src/config/          tunable constants (timer lengths, hatch threshold, grace periods)
 src/features/        timer, aquarium, stats, settings, onboarding, shop — one folder per feature
 src/store/           Zustand store, persisted slice, schema version + migrations
 src/anim/            motion tokens, reduce-motion hook, shared animation primitives
@@ -127,7 +132,8 @@ src/theme/           colors, spacing, typography tokens
 ## Design references
 
 - [Full 2D MVP concept gallery](https://claude.ai/code/artifact/c92d02ea-29b5-4fbe-aa8c-45d6acc39761)
-  — growth stages, the merge mechanic, the animated aquarium, and all 5 screens
+  — the three stages, the merge mechanic, the animated aquarium, and all 5 screens. Predates the
+  reward rearchitecture, so anything it says about XP is out of date
 - [3D vs 2D tank comparison](https://claude.ai/code/artifact/50773e34-7db6-46ac-b803-6a5fb4dffe93)
   — the 3 tank shapes rendered live, plus screens restyled from the real `src/theme/` tokens
 
@@ -140,7 +146,7 @@ should be real 3D, Forest-style, instead of the planned 2D Skia fish. It contain
 Short version: 3D works and does **not** cost Expo Go compatibility, but it is recommended for
 deferral to v2 — a new fish species costs hours as a 2D parameter record and days as a rigged 3D
 asset, and selling species is the business model. The Reef Shark and Clownfish added since then are
-the evidence for that: genuinely different silhouettes, a few dozen lines each, zero bundle growth.
+the evidence for that: genuinely different silhouettes, a few dozen lines each, zero bundle cost.
 Revisit at the M6a gate.
 
 ## Monetization
