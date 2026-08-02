@@ -53,6 +53,13 @@ src/theme/           colors, spacing, typography tokens
   Apple Health integration, Watch app, alternate app concepts) — parked until after MVP ships
 - [`CLAUDE.md`](CLAUDE.md) — context file for AI-assisted development on this repo
 
+## Design references
+
+- [Full 2D MVP concept gallery](https://claude.ai/code/artifact/c92d02ea-29b5-4fbe-aa8c-45d6acc39761)
+  — growth stages, the merge mechanic, the animated aquarium, and all 5 screens
+- [3D vs 2D tank comparison](https://claude.ai/code/artifact/50773e34-7db6-46ac-b803-6a5fb4dffe93)
+  — the 3 tank shapes rendered live, plus screens restyled from the real `src/theme/` tokens
+
 ## Explorations
 
 `explore/3d-aquarium` is a parked spike (not merged, no PR) that tested whether the aquarium
@@ -62,8 +69,6 @@ should be real 3D, Forest-style, instead of the planned 2D Skia fish. It contain
 Short version: 3D works and does **not** cost Expo Go compatibility, but it is recommended for
 deferral to v2 — a new fish species costs hours as a 2D parameter record and days as a rigged 3D
 asset, and selling species is the business model. Revisit at the M6a gate.
-
-[Browse the visual review →](https://claude.ai/code/artifact/50773e34-7db6-46ac-b803-6a5fb4dffe93)
 
 ## Monetization
 

@@ -34,16 +34,25 @@ Apple in iOS 12) while Skia is on Metal.
 
 **Do not switch the MVP to 3D.** The committed 2D Skia direction stands; revisit at the M6a gate.
 
-### Visual review
+### Visual references
 
-`docs/previews/` (on the `explore/3d-aquarium` branch) holds self-contained HTML preview cards —
-the three live tank shapes, the verdict scorecard, and the five app screens — each with a
-`<!-- @dsCard group="..." -->` first line. `node docs/previews/build.mjs` rebuilds them from
-`docs/previews/src/`. Published for browsing at
-https://claude.ai/code/artifact/50773e34-7db6-46ac-b803-6a5fb4dffe93
+Two published concept galleries exist for this project — check both before doing new UI/design work:
+
+- **Full 2D MVP concept** — https://claude.ai/code/artifact/c92d02ea-29b5-4fbe-aa8c-45d6acc39761
+  The primary design reference: the procedural fish system (Fry/Juvenile/Elder growth stages),
+  the merge mechanic diagram, the animated aquarium tank, and all 5 app screens (Focus, Session
+  Complete, Aquarium, Stats, Shop). Built before M0 existed, so it predates the real theme tokens.
+- **3D vs 2D tank comparison** — https://claude.ai/code/artifact/50773e34-7db6-46ac-b803-6a5fb4dffe93
+  Narrower: the 3 tank shapes (box/bowl/cylinder) rendered live in 2D canvas, plus the 5 screens
+  restyled with the real color/type tokens from `src/theme/`. Built to support the 3D feasibility
+  report, not a standalone design reference.
+
+`docs/previews/` (on the `explore/3d-aquarium` branch) holds the source HTML behind the second
+gallery — self-contained preview cards, each with a `<!-- @dsCard group="..." -->` first line.
+`node docs/previews/build.mjs` rebuilds them from `docs/previews/src/`.
 
 **No Claude Design / DesignSync project was created** — the DesignSync tool was not available in
-the environment where this work ran, so the previews were built as portable HTML instead. They are
+the environment where that work ran, so the previews were built as portable HTML instead. They are
 already shaped for DesignSync (`@dsCard` headers, no external requests) if the tool becomes
 available later.
 
