@@ -122,7 +122,7 @@ function sessionHint(status: string, mode: TimerMode): string {
   switch (status) {
     case 'running':
       return mode === 'focus'
-        ? 'Stay in the app. Stepping away for more than a few seconds marks a fish sick, even if you come back before the timer ends.'
+        ? 'Stay in the app. A quick lock-screen glance is fine, but leaving for more than a few seconds marks a fish sick — even if the timer would have finished before you got back.'
         : 'The timer runs on wall-clock time and a notification fires when it ends.';
     case 'paused':
       return 'Paused. Remaining time is held exactly where you left it.';

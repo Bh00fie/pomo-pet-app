@@ -97,11 +97,12 @@ export function useTimer(): UseTimerResult {
   // while backgrounded, which is exactly the lesson M1 already learned about JS timers.
   //
   // `'background'`: record when a running session left, so the M4 grace period can be measured
-  // on return. `'active'`: always fold the clock in first (this is what flips a session that
-  // finished while backgrounded to `completed` — the interval was not running to notice), then
-  // `resolveForeground` decides whether the excursion was long enough to auto-abandon.
-  // `'inactive'` (Control Center, notification shade, incoming call, app-switcher peek) is
-  // deliberately ignored on both sides — only sustained `background` ever counts.
+  // on return. `'active'`: `resolveForeground` checks the excursion length first — past the
+  // grace period it always auto-abandons (whether or not `endsAt` also passed while away), and
+  // only within the grace period does it fold the wall clock in (which is what flips a session
+  // that finished during that short window to `completed` — the interval was not running to
+  // notice). `'inactive'` (Control Center, notification shade, incoming call, app-switcher peek)
+  // is deliberately ignored on both sides — only sustained `background` ever counts.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (next) => {
       const current = Date.now();

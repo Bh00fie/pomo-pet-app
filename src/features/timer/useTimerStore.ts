@@ -55,12 +55,13 @@ interface TimerStore {
    *  Records the absolute timestamp; a no-op if not running or an excursion is already open. */
   noteBackgrounded: (now?: number) => void;
   /**
-   * Call on an `AppState` transition to `'active'` (docs/PLAN.md M4). Always folds the wall
-   * clock in first — a session whose `endsAt` had already passed while backgrounded is a normal
-   * completion no matter how long the app was away, exactly the M1 "you can lock your phone"
-   * flow. Only if the session is *still* `running` after that, and the backgrounded excursion
-   * exceeded `ACCOUNTABILITY.backgroundGraceMs`, does it auto-abandon and bump
-   * `lastPenaltyToken`.
+   * Call on an `AppState` transition to `'active'` (docs/PLAN.md M4). Checks the excursion
+   * length *first*: if the app was backgrounded past `ACCOUNTABILITY.backgroundGraceMs`, the
+   * session is always auto-abandoned and `lastPenaltyToken` bumped — regardless of whether
+   * `endsAt` also passed while away. Sustained backgrounding is what's punished; a timer that
+   * also finished in the meantime is not an escape hatch. Only when the excursion was *within*
+   * the grace period does it fold the wall clock in and let the session complete naturally if
+   * `endsAt` passed during that short window.
    */
   resolveForeground: (now?: number) => void;
 }
@@ -157,24 +158,32 @@ export const useTimerStore = create<TimerStore>()((set, get) => {
     resolveForeground: (now = Date.now()) => {
       const { backgroundedAt } = get();
 
-      // Always fold the clock in first, exactly like the plain foreground tick from M1 — if the
-      // session's own `endsAt` had already passed while backgrounded, that is a normal
-      // completion no matter how long the excursion was, never a penalty.
-      get().dispatch({ type: 'TICK', now });
+      if (backgroundedAt === null) {
+        // No open excursion for this foreground event — just the ordinary foreground tick (e.g.
+        // completing a session whose `endsAt` passed without an interval firing to notice).
+        get().dispatch({ type: 'TICK', now });
+        return;
+      }
 
-      if (backgroundedAt === null) return;
       set({ backgroundedAt: null });
-
       const elapsed = now - backgroundedAt;
-      if (elapsed <= ACCOUNTABILITY.backgroundGraceMs) return;
 
-      // If the tick above already completed (or the user somehow paused/reset/abandoned) the
-      // session, there is nothing left to penalize — only a session still `running` after the
-      // reconcile counts as "left early".
-      if (get().timer.status !== 'running') return;
+      if (elapsed > ACCOUNTABILITY.backgroundGraceMs) {
+        // Sustained backgrounding is what's punished, and that takes priority over whether
+        // `endsAt` also passed while away — a session backgrounded for its entire duration (or
+        // longer) must still abandon+penalize, not complete+reward. Only a session still
+        // `running` at this point can be abandoned.
+        if (get().timer.status === 'running') {
+          get().dispatch({ type: 'ABANDON', now });
+          set((s) => ({ lastPenaltyToken: s.lastPenaltyToken + 1 }));
+        }
+        return;
+      }
 
-      get().dispatch({ type: 'ABANDON', now });
-      set((s) => ({ lastPenaltyToken: s.lastPenaltyToken + 1 }));
+      // Within the grace period: fold the wall clock in, same as an ordinary foreground tick —
+      // this is what completes a session whose `endsAt` passed during that short window (the M1
+      // "you can lock your phone briefly" flow).
+      get().dispatch({ type: 'TICK', now });
     },
   };
 });

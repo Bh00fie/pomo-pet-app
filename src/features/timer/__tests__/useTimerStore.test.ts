@@ -230,16 +230,31 @@ describe('noteBackgrounded / resolveForeground (docs/PLAN.md M4 leave-early pena
     expect(useTimerStore.getState().lastPenaltyToken).toBe(1);
   });
 
-  it('never penalizes a session whose natural endsAt had already passed while backgrounded (M1 "lock your phone" flow)', () => {
+  it('penalizes sustained backgrounding even when the session\'s own endsAt also passed while away', () => {
+    // The user's decision (post-M4 review): leaving the app past the grace period is what's
+    // punished, full stop — "the timer would also have finished" is not an escape hatch.
     useTimerStore.getState().start(); // 25-minute focus session
 
-    // Backgrounded for the entire session and well beyond the grace period, but the session's
-    // own endsAt was reached while away — that is a normal completion, not a penalty.
+    // Backgrounded for the entire session and well beyond the grace period. Even though the
+    // session's own endsAt was reached while away, sustained backgrounding still abandons it.
     useTimerStore.getState().noteBackgrounded(NOW + MINUTE);
     useTimerStore.getState().resolveForeground(NOW + 26 * MINUTE);
 
-    expect(useTimerStore.getState().timer.status).toBe('completed');
-    expect(useTimerStore.getState().lastPenaltyToken).toBe(0);
+    expect(useTimerStore.getState().timer.status).toBe('abandoned');
+    expect(useTimerStore.getState().lastPenaltyToken).toBe(1);
+  });
+
+  it('penalizes a session backgrounded for its full duration or longer (elapsed >= durationMs)', () => {
+    // The exact scenario the review flagged: backgrounding for the entire 25-minute session
+    // used to `complete` in full; it must now abandon+penalize, same as any other excursion past
+    // the grace period.
+    useTimerStore.getState().start(); // 25-minute focus session, endsAt = NOW + 25 * MINUTE
+
+    useTimerStore.getState().noteBackgrounded(NOW);
+    useTimerStore.getState().resolveForeground(NOW + 25 * MINUTE); // exactly the full duration
+
+    expect(useTimerStore.getState().timer.status).toBe('abandoned');
+    expect(useTimerStore.getState().lastPenaltyToken).toBe(1);
   });
 
   it('does not double-penalize across repeated foreground events for the same excursion', () => {

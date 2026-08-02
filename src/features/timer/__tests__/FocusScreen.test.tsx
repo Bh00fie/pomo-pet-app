@@ -250,7 +250,7 @@ describe('FocusScreen', () => {
       expect(useAppStore.getState().stats.abandonedSessions).toBe(1);
     });
 
-    it('does not penalize when the session finished naturally while backgrounded (locking the phone for the whole session)', async () => {
+    it('penalizes a full-session background even though the timer would also have finished (user decision, post-M4 review)', async () => {
       await render(<FocusScreen />);
       await fireEvent.press(screen.getByText('Start focus session'));
 
@@ -260,8 +260,8 @@ describe('FocusScreen', () => {
       });
       await fireAppStateChange('active');
 
-      expect(useTimerStore.getState().timer.status).toBe('completed');
-      expect(screen.queryByText('SESSION ABANDONED')).toBeNull();
+      expect(useTimerStore.getState().timer.status).toBe('abandoned');
+      expect(screen.getByText('SESSION ABANDONED')).toBeTruthy();
     });
   });
 });

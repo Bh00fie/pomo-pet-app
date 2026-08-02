@@ -8,7 +8,9 @@ import { useAppStore } from '@/store';
  * bumps `lastPenaltyToken` exactly when a running session is auto-abandoned for staying
  * backgrounded past `ACCOUNTABILITY.backgroundGraceMs` — never for a manual "Give up" (which
  * already withholds the reward on its own via `useSessionReward` only firing on `completed`),
- * and never when the session had already legitimately finished while backgrounded.
+ * and never when the excursion stayed *within* the grace period (whether or not `endsAt` also
+ * passed during that short window). Sustained backgrounding always penalizes now, even if
+ * `endsAt` also passed while away — see `resolveForeground`'s doc comment.
  *
  * Mount this once near the app root, same reasoning as `useSessionReward`: a session that gets
  * penalized while the user is on another tab still needs a fish to get sick.
