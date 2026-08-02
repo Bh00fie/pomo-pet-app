@@ -82,6 +82,15 @@ export const SHOP = {
     'golden-koi': 1.99,
     'indigo-betta': 2.99,
   } as Record<string, number>,
+  /** Chance (0..1) a mock purchase fails on its own, so the shop UI has to render a real failure
+   *  path rather than only ever observing success — see `MockEntitlementProvider`. */
+  mockPurchaseFailureRate: 0.1,
+  /** Simulated store round-trip, ms, for a mock purchase — long enough that a genuine loading
+   *  state is observable rather than reading as instant. */
+  mockPurchaseDelayMs: 900,
+  /** Simulated round-trip for restore, ms — shorter than a purchase since there is nothing to
+   *  charge, only to re-fetch. */
+  mockRestoreDelayMs: 300,
 } as const;
 
 export const STAGES = ['fry', 'juvenile', 'elder'] as const;

@@ -8,7 +8,7 @@ import type { PersistedState } from './types';
  * matching entry to `migrations`. Versioned from commit one on purpose (docs/PLAN.md M0) —
  * retrofitting migrations onto already-shipped user data is the expensive version of this problem.
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /** The placeholder species id shipped in the v1 default `entitlements.unlockedSpeciesIds`. It
  *  never matched a real species — the species catalog did not exist until M2 — so any stored copy
@@ -76,6 +76,29 @@ export const migrations: Record<number, Migration> = {
       settings: {
         ...storedSettings,
         reduceMotion: storedSettings.reduceMotion === true ? 'on' : 'system',
+      },
+    };
+  },
+
+  /**
+   * v3 → v4 (M6a). `settings` gains `activeSpeciesId` — which species new fry hatch as, now that
+   * the shop can unlock more than the starter. No v3 payload could have this field at all, so the
+   * only correct default is the starter species; the store additionally re-validates it against
+   * `entitlements.unlockedSpeciesIds` on every read (`awardSessionCompletion`), so a value that
+   * somehow named an unowned species can never survive as live state, migrated or not.
+   */
+  3: (state) => {
+    if (typeof state !== 'object' || state === null) return state;
+    const s = state as Record<string, unknown>;
+    const storedSettings = (s.settings ?? {}) as Record<string, unknown>;
+    return {
+      ...s,
+      settings: {
+        ...storedSettings,
+        activeSpeciesId:
+          typeof storedSettings.activeSpeciesId === 'string'
+            ? storedSettings.activeSpeciesId
+            : STARTER_SPECIES_ID,
       },
     };
   },

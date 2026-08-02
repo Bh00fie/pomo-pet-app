@@ -1,5 +1,5 @@
 import { GROWTH } from '@/config';
-import { addXp, createFish, STARTER_SPECIES_ID, type Fish } from '../model';
+import { addXp, createFish, GOLDEN_KOI_SPECIES_ID, STARTER_SPECIES_ID, type Fish } from '../model';
 import { applySessionReward, xpForFocusMs } from '../reward';
 
 const MS_PER_MINUTE = 60_000;
@@ -124,6 +124,83 @@ describe('applySessionReward', () => {
 
     expect(result.spawned).toBe(true);
     expect(result.fish).toHaveLength(3);
+  });
+});
+
+describe('applySessionReward — spawnSpeciesId (docs/PLAN.md M6a)', () => {
+  const idFactory = () => 'new-fish';
+
+  it('defaults to the starter species when spawnSpeciesId is omitted (pre-M6a callers/tests unaffected)', () => {
+    const result = applySessionReward({ fish: [], focusMs: 25 * MS_PER_MINUTE, now: 0, idFactory });
+    expect(result.fish[0].speciesId).toBe(STARTER_SPECIES_ID);
+  });
+
+  it('hatches a fresh Fry as the given spawnSpeciesId when there is nothing to grow', () => {
+    const result = applySessionReward({
+      fish: [],
+      focusMs: 25 * MS_PER_MINUTE,
+      now: 0,
+      idFactory,
+      spawnSpeciesId: GOLDEN_KOI_SPECIES_ID,
+    });
+    expect(result.spawned).toBe(true);
+    expect(result.fish[0].speciesId).toBe(GOLDEN_KOI_SPECIES_ID);
+  });
+
+  it('spawns the given spawnSpeciesId once every existing fish is capped, leaving the capped fish’s own species alone', () => {
+    const cappedStarter = addXp(createFish(STARTER_SPECIES_ID, 0, 'capped'), GROWTH.xpPerStage);
+
+    const result = applySessionReward({
+      fish: [cappedStarter],
+      focusMs: 25 * MS_PER_MINUTE,
+      now: 0,
+      idFactory,
+      spawnSpeciesId: GOLDEN_KOI_SPECIES_ID,
+    });
+
+    expect(result.fish).toHaveLength(2);
+    const capped = result.fish.find((f) => f.id === 'capped')!;
+    const hatched = result.fish.find((f) => f.id === 'new-fish')!;
+    expect(capped.speciesId).toBe(STARTER_SPECIES_ID); // untouched — spawning a new species never rewrites an existing fish
+    expect(hatched.speciesId).toBe(GOLDEN_KOI_SPECIES_ID);
+  });
+
+  it('grows an existing under-cap fish of a different species rather than spawning — spawnSpeciesId only applies when nothing has room', () => {
+    const existingKoi = createFish(GOLDEN_KOI_SPECIES_ID, 0, 'koi');
+
+    const result = applySessionReward({
+      fish: [existingKoi],
+      focusMs: 10 * MS_PER_MINUTE,
+      now: 0,
+      idFactory,
+      spawnSpeciesId: STARTER_SPECIES_ID, // active species is the starter, but there's room on the koi
+    });
+
+    expect(result.spawned).toBe(false);
+    expect(result.fish).toHaveLength(1);
+    expect(result.fish[0].speciesId).toBe(GOLDEN_KOI_SPECIES_ID);
+  });
+
+  it('carries overflow into a new fry of spawnSpeciesId, not the target fish’s own species', () => {
+    const almostCapped: Fish = {
+      ...createFish(STARTER_SPECIES_ID, 0, 'almost'),
+      xp: GROWTH.xpPerStage - 10,
+    };
+
+    const result = applySessionReward({
+      fish: [almostCapped],
+      focusMs: 25 * MS_PER_MINUTE,
+      now: 0,
+      idFactory,
+      spawnSpeciesId: GOLDEN_KOI_SPECIES_ID,
+    });
+
+    const grown = result.fish.find((f) => f.id === 'almost')!;
+    const overflowFry = result.fish.find((f) => f.id === 'new-fish')!;
+    expect(grown.speciesId).toBe(STARTER_SPECIES_ID);
+    expect(grown.xp).toBe(GROWTH.xpPerStage);
+    expect(overflowFry.speciesId).toBe(GOLDEN_KOI_SPECIES_ID);
+    expect(overflowFry.xp).toBe(15);
   });
 });
 

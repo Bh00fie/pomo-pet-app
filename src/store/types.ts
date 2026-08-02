@@ -18,6 +18,14 @@ export interface Settings {
   hapticsEnabled: boolean;
   notificationsEnabled: boolean;
   reduceMotion: ReduceMotionPreference;
+  /**
+   * Species new fry hatch as once the user owns more than the starter (docs/PLAN.md M6a) — the
+   * "grow-or-spawn" rule in `src/features/pet/reward.ts` only ever spawned the starter species
+   * before the shop existed. Set via a selector in the Shop screen; the store falls back to
+   * `STARTER_SPECIES_ID` if this ever points at a species the user doesn't (or no longer) own —
+   * see `useAppStore.awardSessionCompletion`.
+   */
+  activeSpeciesId: SpeciesId;
 }
 
 export interface Stats {

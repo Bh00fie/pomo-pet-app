@@ -1,5 +1,11 @@
 import { GROWTH } from '@/config';
-import { createFish, STARTER_SPECIES_ID, type Fish } from '@/features/pet/model';
+import {
+  createFish,
+  GOLDEN_KOI_SPECIES_ID,
+  INDIGO_BETTA_SPECIES_ID,
+  STARTER_SPECIES_ID,
+  type Fish,
+} from '@/features/pet/model';
 import { useAppStore } from '../useAppStore';
 
 const MINUTE = 60_000;
@@ -173,6 +179,97 @@ describe('recordManualAbandon (M5-review fix)', () => {
     expect(after.currentStreak).toBe(before.currentStreak);
     expect(after.totalFocusMs).toBe(before.totalFocusMs);
     expect(after.completedSessions).toBe(before.completedSessions);
+  });
+});
+
+describe('unlockSpecies / syncUnlockedSpeciesIds / setActiveSpecies (docs/PLAN.md M6a)', () => {
+  it('unlockSpecies adds a species that is not yet owned', () => {
+    expect(useAppStore.getState().entitlements.unlockedSpeciesIds).toEqual([STARTER_SPECIES_ID]);
+
+    useAppStore.getState().unlockSpecies(GOLDEN_KOI_SPECIES_ID);
+
+    expect(useAppStore.getState().entitlements.unlockedSpeciesIds).toEqual([
+      STARTER_SPECIES_ID,
+      GOLDEN_KOI_SPECIES_ID,
+    ]);
+  });
+
+  it('unlockSpecies is idempotent — a duplicate call is a true no-op, not just a de-duplicated result', () => {
+    useAppStore.getState().unlockSpecies(GOLDEN_KOI_SPECIES_ID);
+    const before = useAppStore.getState().entitlements;
+
+    useAppStore.getState().unlockSpecies(GOLDEN_KOI_SPECIES_ID);
+
+    // Same object reference — confirms the second call skipped `set` entirely rather than
+    // producing an equal-but-new object.
+    expect(useAppStore.getState().entitlements).toBe(before);
+  });
+
+  it('setActiveSpecies switches the species new fry hatch as, once the species is owned', () => {
+    useAppStore.getState().unlockSpecies(GOLDEN_KOI_SPECIES_ID);
+    useAppStore.getState().setActiveSpecies(GOLDEN_KOI_SPECIES_ID);
+
+    expect(useAppStore.getState().settings.activeSpeciesId).toBe(GOLDEN_KOI_SPECIES_ID);
+  });
+
+  it('setActiveSpecies refuses to select a species the user does not own', () => {
+    useAppStore.getState().setActiveSpecies(GOLDEN_KOI_SPECIES_ID); // never unlocked
+
+    expect(useAppStore.getState().settings.activeSpeciesId).toBe(STARTER_SPECIES_ID);
+  });
+
+  it('syncUnlockedSpeciesIds unions a restore result with what is already unlocked, never removing anything', () => {
+    useAppStore.getState().unlockSpecies(GOLDEN_KOI_SPECIES_ID);
+
+    useAppStore.getState().syncUnlockedSpeciesIds([INDIGO_BETTA_SPECIES_ID]);
+
+    expect(useAppStore.getState().entitlements.unlockedSpeciesIds.sort()).toEqual(
+      [STARTER_SPECIES_ID, GOLDEN_KOI_SPECIES_ID, INDIGO_BETTA_SPECIES_ID].sort(),
+    );
+  });
+
+  it('syncUnlockedSpeciesIds always guarantees the starter species even from an empty restore result', () => {
+    useAppStore.getState().syncUnlockedSpeciesIds([]);
+    expect(useAppStore.getState().entitlements.unlockedSpeciesIds).toContain(STARTER_SPECIES_ID);
+  });
+});
+
+describe('awardSessionCompletion — species-selection for new fry (docs/PLAN.md M6a)', () => {
+  it('still hatches the starter species by default — the active species defaults to the starter', () => {
+    useAppStore.getState().awardSessionCompletion(25 * MINUTE, 1_700_000_000_000);
+    expect(useAppStore.getState().fish[0].speciesId).toBe(STARTER_SPECIES_ID);
+  });
+
+  it('hatches the user’s chosen active species once it is unlocked and selected', () => {
+    useAppStore.getState().unlockSpecies(GOLDEN_KOI_SPECIES_ID);
+    useAppStore.getState().setActiveSpecies(GOLDEN_KOI_SPECIES_ID);
+
+    useAppStore.getState().awardSessionCompletion(25 * MINUTE, 1_700_000_000_000);
+
+    expect(useAppStore.getState().fish[0].speciesId).toBe(GOLDEN_KOI_SPECIES_ID);
+  });
+
+  it('a second fry, once the first is capped, hatches as the active species too — not stuck on the starter forever', () => {
+    useAppStore.getState().unlockSpecies(GOLDEN_KOI_SPECIES_ID);
+    useAppStore.getState().setActiveSpecies(GOLDEN_KOI_SPECIES_ID);
+
+    useAppStore.getState().awardSessionCompletion(10_000 * MINUTE, 1_700_000_000_000); // caps the first fry
+    useAppStore.getState().awardSessionCompletion(25 * MINUTE, 1_700_000_100_000);
+
+    const { fish } = useAppStore.getState();
+    expect(fish).toHaveLength(2);
+    expect(fish.every((f) => f.speciesId === GOLDEN_KOI_SPECIES_ID)).toBe(true);
+  });
+
+  it('falls back to the starter species if activeSpeciesId somehow names a species no longer owned', () => {
+    // Defensive path: force a corrupt/stale state directly (setActiveSpecies itself would have
+    // refused this) and confirm the reward path still never spawns an unowned species.
+    useAppStore.setState((s) => ({ settings: { ...s.settings, activeSpeciesId: GOLDEN_KOI_SPECIES_ID } }));
+    expect(useAppStore.getState().entitlements.unlockedSpeciesIds).not.toContain(GOLDEN_KOI_SPECIES_ID);
+
+    useAppStore.getState().awardSessionCompletion(25 * MINUTE, 1_700_000_000_000);
+
+    expect(useAppStore.getState().fish[0].speciesId).toBe(STARTER_SPECIES_ID);
   });
 });
 

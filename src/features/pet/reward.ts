@@ -6,7 +6,7 @@
  * into the store, which in turn calls `applySessionReward`.
  */
 import { GROWTH } from '@/config';
-import { addXp, createFish, STARTER_SPECIES_ID, type Fish } from './model';
+import { addXp, createFish, STARTER_SPECIES_ID, type Fish, type SpeciesId } from './model';
 
 const MS_PER_MINUTE = 60_000;
 
@@ -26,6 +26,16 @@ export interface SessionRewardInput {
   now: number;
   /** Injected so tests can produce deterministic ids; the store wires a real generator. */
   idFactory: () => string;
+  /**
+   * Species a fresh Fry hatches as when nothing existing has room to grow (docs/PLAN.md M6a).
+   * Defaults to `STARTER_SPECIES_ID` — before M6a this was the only species that existed, and
+   * every existing caller/test that omits this still gets exactly that behaviour. The store is
+   * responsible for resolving this to the user's chosen "active" species and for falling back to
+   * the starter if that species is somehow no longer unlocked; this function trusts whatever it
+   * is given rather than re-deriving ownership itself (this file has no store/entitlements
+   * imports, same discipline as everywhere else in `features/pet`).
+   */
+  spawnSpeciesId?: SpeciesId;
 }
 
 export interface SessionRewardResult {
@@ -53,11 +63,17 @@ interface DistributeResult {
  * completed session grows is what cures it, whether or not this particular call is the one that
  * carries the overflow.
  */
-function distributeXp(fish: Fish[], xp: number, now: number, idFactory: () => string): DistributeResult {
+function distributeXp(
+  fish: Fish[],
+  xp: number,
+  now: number,
+  idFactory: () => string,
+  spawnSpeciesId: SpeciesId,
+): DistributeResult {
   const growthTarget = fish.find((f) => f.xp < GROWTH.xpPerStage);
 
   if (!growthTarget) {
-    const hatched = addXp(createFish(STARTER_SPECIES_ID, now, idFactory()), xp);
+    const hatched = addXp(createFish(spawnSpeciesId, now, idFactory()), xp);
     return { fish: [...fish, hatched], awardedFishId: hatched.id, spawned: true };
   }
 
@@ -76,7 +92,7 @@ function distributeXp(fish: Fish[], xp: number, now: number, idFactory: () => st
   // discarded. `awardedFishId` stays the *primary* target — the fish this session's XP actually
   // landed on first — even when the overflow goes on to grow (or spawn) a different one.
   const overflow = xp - room;
-  const rest = distributeXp(grown, overflow, now, idFactory);
+  const rest = distributeXp(grown, overflow, now, idFactory, spawnSpeciesId);
   return { fish: rest.fish, awardedFishId: growthTarget.id, spawned: rest.spawned };
 }
 
@@ -96,6 +112,13 @@ function distributeXp(fish: Fish[], xp: number, now: number, idFactory: () => st
  */
 export function applySessionReward(input: SessionRewardInput): SessionRewardResult {
   const xpAwarded = xpForFocusMs(input.focusMs);
-  const { fish, awardedFishId, spawned } = distributeXp(input.fish, xpAwarded, input.now, input.idFactory);
+  const spawnSpeciesId = input.spawnSpeciesId ?? STARTER_SPECIES_ID;
+  const { fish, awardedFishId, spawned } = distributeXp(
+    input.fish,
+    xpAwarded,
+    input.now,
+    input.idFactory,
+    spawnSpeciesId,
+  );
   return { fish, awardedFishId, xpAwarded, spawned };
 }

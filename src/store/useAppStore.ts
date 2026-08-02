@@ -6,7 +6,7 @@ import { APP, TIMER } from '@/config';
 // which imports this store, and going through it here would create a module-load cycle.
 import { generateFishId } from '@/features/pet/id';
 import { evaluateMerge, type MergeResult } from '@/features/pet/merge';
-import { STARTER_SPECIES_ID } from '@/features/pet/model';
+import { STARTER_SPECIES_ID, type SpeciesId } from '@/features/pet/model';
 import { applyPenalty } from '@/features/pet/penalty';
 import { applySessionReward } from '@/features/pet/reward';
 import { applyCompletedSessionToStreak, toLocalDateString } from '@/features/streak';
@@ -47,6 +47,29 @@ interface AppActions {
    * merge leaves the fish collection completely untouched, never partially edited.
    */
   mergeFish: (selectedIds: string[], now: number) => MergeResult;
+  /**
+   * Adds a species to `entitlements.unlockedSpeciesIds` (docs/PLAN.md M6a). Idempotent — a no-op
+   * (no `set` at all) if the species is already owned, e.g. a duplicate purchase attempt. Does
+   * **not** talk to any `EntitlementProvider`; callers (the Shop screen) resolve the purchase
+   * through the provider first and call this only once it reports success — same shape the call
+   * site will need again once `MockEntitlementProvider` is swapped for a real one at M6b.
+   */
+  unlockSpecies: (speciesId: SpeciesId) => void;
+  /**
+   * Re-syncs `entitlements.unlockedSpeciesIds` from a restore-purchases result (docs/PLAN.md
+   * M6a): a **union**, never a replace — a provider's restore result is everything it knows the
+   * user owns, not the complete truth of every id already unlocked locally (a real provider could
+   * be temporarily behind; there is no reason a restore should ever *remove* something already
+   * unlocked). The starter species is always guaranteed present.
+   */
+  syncUnlockedSpeciesIds: (speciesIds: SpeciesId[]) => void;
+  /**
+   * Sets which species a fresh Fry hatches as (docs/PLAN.md M6a — see `Settings.activeSpeciesId`
+   * and `awardSessionCompletion` below). A no-op if the species isn't in
+   * `entitlements.unlockedSpeciesIds` — the Shop screen only ever offers this for owned species,
+   * but the guard lives here too so it can never be bypassed by a stray call.
+   */
+  setActiveSpecies: (speciesId: SpeciesId) => void;
   /** Test/dev affordance — wipes persisted state back to defaults. */
   resetAll: () => void;
 }
@@ -65,6 +88,7 @@ const initialPersisted: PersistedState = {
     hapticsEnabled: true,
     notificationsEnabled: true,
     reduceMotion: 'system',
+    activeSpeciesId: STARTER_SPECIES_ID,
   },
   stats: {
     totalFocusMs: 0,
@@ -93,11 +117,20 @@ export const useAppStore = create<AppStore>()(
 
       awardSessionCompletion: (focusMs, now) =>
         set((s) => {
+          // The species a fresh Fry hatches as (docs/PLAN.md M6a). Re-validated against
+          // ownership on every call, not just when it's set (`setActiveSpecies` already guards
+          // its own write) — a species could stop being owned by some future path this store
+          // doesn't have yet (e.g. a refund), and a stale unowned id must never reach `reward.ts`.
+          const spawnSpeciesId = s.entitlements.unlockedSpeciesIds.includes(s.settings.activeSpeciesId)
+            ? s.settings.activeSpeciesId
+            : STARTER_SPECIES_ID;
+
           const result = applySessionReward({
             fish: s.fish,
             focusMs,
             now,
             idFactory: () => generateFishId(now),
+            spawnSpeciesId,
           });
 
           // Streak + basic stats update alongside the fish reward, in the same `set` — one
@@ -152,6 +185,31 @@ export const useAppStore = create<AppStore>()(
         });
         if (result.ok) set({ fish: result.fish });
         return result;
+      },
+
+      unlockSpecies: (speciesId) => {
+        if (get().entitlements.unlockedSpeciesIds.includes(speciesId)) return;
+        set((s) => ({
+          entitlements: {
+            ...s.entitlements,
+            unlockedSpeciesIds: [...s.entitlements.unlockedSpeciesIds, speciesId],
+          },
+        }));
+      },
+
+      syncUnlockedSpeciesIds: (speciesIds) =>
+        set((s) => ({
+          entitlements: {
+            ...s.entitlements,
+            unlockedSpeciesIds: Array.from(
+              new Set([STARTER_SPECIES_ID, ...s.entitlements.unlockedSpeciesIds, ...speciesIds]),
+            ),
+          },
+        })),
+
+      setActiveSpecies: (speciesId) => {
+        if (!get().entitlements.unlockedSpeciesIds.includes(speciesId)) return;
+        set((s) => ({ settings: { ...s.settings, activeSpeciesId: speciesId } }));
       },
 
       resetAll: () => set({ ...initialPersisted }),

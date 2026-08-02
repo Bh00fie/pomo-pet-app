@@ -72,12 +72,16 @@ describe('migrate', () => {
     expect(noEntitlements.entitlements.unlockedTankIds).toEqual(['rectangular']);
   });
 
-  it('leaves every other persisted slice untouched (except settings.reduceMotion, migrated separately by step 2)', () => {
+  it('leaves every other persisted slice untouched (except settings.reduceMotion and activeSpeciesId, migrated separately by steps 2 and 3)', () => {
     const before = v1State({ onboardingCompletedAt: 12345 }) as PersistedState;
     const after = migrate(before, 1);
 
     expect(after.fish).toEqual(before.fish);
-    expect(after.settings).toEqual({ ...before.settings, reduceMotion: 'system' });
+    expect(after.settings).toEqual({
+      ...before.settings,
+      reduceMotion: 'system',
+      activeSpeciesId: STARTER_SPECIES_ID,
+    });
     expect(after.stats).toEqual(before.stats);
     expect(after.onboardingCompletedAt).toBe(12345);
   });
@@ -150,12 +154,69 @@ describe('migrate — v2 -> v3, reduceMotion tri-state (M5)', () => {
   it('leaves every other settings field untouched', () => {
     const before = v2State() as PersistedState;
     const after = migrate(before, 2);
-    expect(after.settings).toEqual({ ...before.settings, reduceMotion: 'system' });
+    expect(after.settings).toEqual({
+      ...before.settings,
+      reduceMotion: 'system',
+      activeSpeciesId: STARTER_SPECIES_ID,
+    });
   });
 
   it('walking from v1 all the way to v3 applies both migrations in order', () => {
     const result = migrate(v1State({ settings: { reduceMotion: true } }), 1);
     expect(result.entitlements.unlockedSpeciesIds).toEqual([STARTER_SPECIES_ID]);
     expect(result.settings.reduceMotion).toBe('on');
+  });
+});
+
+/** A realistic v3 payload: the shape persisted from M5 through the close of M6a's build, before
+ *  `settings.activeSpeciesId` existed at all. */
+function v3State(overrides: Record<string, unknown> = {}): unknown {
+  return {
+    fish: [],
+    settings: {
+      workMinutes: 25,
+      shortBreakMinutes: 5,
+      longBreakMinutes: 15,
+      hapticsEnabled: true,
+      notificationsEnabled: true,
+      reduceMotion: 'system',
+    },
+    stats: {
+      totalFocusMs: 0,
+      completedSessions: 0,
+      abandonedSessions: 0,
+      currentStreak: 0,
+      longestStreak: 0,
+      lastCompletedLocalDate: null,
+      focusMsByDate: {},
+    },
+    entitlements: { unlockedSpeciesIds: [STARTER_SPECIES_ID], unlockedTankIds: ['rectangular'] },
+    onboardingCompletedAt: null,
+    ...overrides,
+  };
+}
+
+describe('migrate — v3 -> v4, activeSpeciesId (M6a)', () => {
+  it('defaults to the starter species when the field is missing (every v3 payload)', () => {
+    const result = migrate(v3State(), 3);
+    expect(result.settings.activeSpeciesId).toBe(STARTER_SPECIES_ID);
+  });
+
+  it('defaults to the starter species even if the settings object itself is absent', () => {
+    const result = migrate(v3State({ settings: undefined }), 3);
+    expect(result.settings.activeSpeciesId).toBe(STARTER_SPECIES_ID);
+  });
+
+  it('leaves every other settings field untouched', () => {
+    const before = v3State() as PersistedState;
+    const after = migrate(before, 3);
+    expect(after.settings).toEqual({ ...before.settings, activeSpeciesId: STARTER_SPECIES_ID });
+  });
+
+  it('walking from v1 all the way to v4 applies all three migrations in order', () => {
+    const result = migrate(v1State({ settings: { reduceMotion: true } }), 1);
+    expect(result.entitlements.unlockedSpeciesIds).toEqual([STARTER_SPECIES_ID]);
+    expect(result.settings.reduceMotion).toBe('on');
+    expect(result.settings.activeSpeciesId).toBe(STARTER_SPECIES_ID);
   });
 });
