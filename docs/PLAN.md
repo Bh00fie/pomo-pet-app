@@ -17,12 +17,30 @@ you've used the finished app and decided you like it — see the decision gate b
 - IAP is built against a **mock entitlement provider** for the whole free phase — full shop/paywall
   UX, no real money, swapped for RevenueCat only after enrollment.
 
-## M0 — Scaffold, gated
+## M0 — Scaffold, gated  [~] built, awaiting the on-device gate
 
-- [ ] `npx create-expo-app` (TypeScript template), then pin `expo` to `~54.0.0`, `npx expo install --fix`
-- [ ] Folder structure: `app/` (Expo Router routes only), `src/{config,features,store,anim,ui,theme}`
-- [ ] Zustand + AsyncStorage `persist`, versioned schema/migration from commit one
+- [x] `npx create-expo-app` (TypeScript template), then pin `expo` to `~54.0.0`, `npx expo install --fix`
+- [x] Folder structure: `app/` (Expo Router routes only), `src/{config,features,store,anim,ui,theme}`
+- [x] Zustand + AsyncStorage `persist`, versioned schema/migration from commit one
+      (`src/store/migrations.ts` — `SCHEMA_VERSION` + migration runner, wired into `persist`)
 - [ ] **Gate**: confirm the app opens in App Store Expo Go on your phone before continuing
+
+Verified on 2026-08-02, machine-checkable parts only:
+
+- `node_modules/.bin/expo --version` → `54.0.26`, installed `expo` package → `54.0.36` (both 54.x)
+- `npx tsc --noEmit` → clean
+- `npx expo-doctor` → 18/18 checks passed
+- `npx expo export --platform ios` → succeeds; Hermes bundle **3.81 MB**
+  (this is the 2D baseline the 3D spike is measured against)
+
+The remaining gate is the one thing that genuinely needs your phone: scan the QR from
+`npx expo start` with App Store Expo Go and confirm the four tabs load. Nothing here can
+verify that, so M0 stays `[~]` until you do.
+
+Installed and pinned: `expo-router`, `react-native-reanimated` 4 (+ `react-native-worklets`
+babel plugin), `@shopify/react-native-skia`, `zustand`, `@react-native-async-storage/async-storage`,
+`expo-notifications`, `expo-haptics`, `react-native-gesture-handler`, `react-native-screens`,
+`react-native-safe-area-context`.
 
 ## M1 — Timer engine
 
