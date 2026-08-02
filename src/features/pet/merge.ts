@@ -39,7 +39,7 @@ export interface MergeSuccess {
   ok: true;
   /** Ids removed from the collection — the fish consumed by the merge. */
   removedIds: string[];
-  /** The fish created by the merge: stage advanced one step, 0 XP in its new stage. */
+  /** The fish created by the merge: one fresh, healthy fish, stage advanced one step. */
   newFish: Fish;
   /** The full resulting collection — `input.fish` minus `removedIds`, plus `newFish`. Apply this
    *  wholesale (or not at all); it is never a partial edit. */

@@ -31,7 +31,7 @@ export const NOTIFICATIONS = {
   sessionEndCategory: 'session-end',
   focus: {
     title: 'Focus session complete',
-    body: 'Nice work. Your fish grew — take a break.',
+    body: 'Nice work. A new fish hatched — take a break.',
   },
   break: {
     title: 'Break over',

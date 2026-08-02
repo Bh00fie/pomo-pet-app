@@ -13,7 +13,11 @@ interface Step {
 
 const STEPS: Step[] = [
   { emoji: '⏳', title: 'Focus', body: 'Run a Pomodoro session on the Focus tab.' },
-  { emoji: '🐟', title: 'Grow a fish', body: 'Every completed session grows a fish in your Aquarium.' },
+  {
+    emoji: '🐟',
+    title: 'Hatch a fish',
+    body: 'Every completed session hatches a new fish. Longer sessions hatch bigger ones.',
+  },
   { emoji: '✨', title: 'Merge', body: 'Collect three same-stage fish and merge them into the next stage.' },
   {
     emoji: '⚠️',
@@ -43,7 +47,7 @@ export function OnboardingScreen() {
         </Text>
         <Text variant="title">{APP.name}</Text>
         <Text color="textMuted" style={styles.intro}>
-          A Pomodoro timer that grows a personal aquarium as you focus.
+          A Pomodoro timer that fills a personal aquarium as you focus.
         </Text>
 
         <View style={styles.steps}>

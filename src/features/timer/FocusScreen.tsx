@@ -134,7 +134,7 @@ function sessionHint(status: string, mode: TimerMode): string {
       return 'Paused. Remaining time is held exactly where you left it.';
     case 'completed':
       return mode === 'focus'
-        ? 'Session finished. Check the Aquarium tab — your fish grew.'
+        ? 'Session finished. Check the Aquarium tab — a new fish hatched.'
         : 'Break over. Back to focus when you are ready.';
     default:
       return 'Session ended early. Nothing was awarded.';
