@@ -3,14 +3,21 @@
 import type { Fish, SpeciesId } from '@/features/pet/model';
 export type { Fish, FishHealth, SpeciesId } from '@/features/pet/model';
 
+/**
+ * User override of the OS "Reduce Motion" accessibility setting (M5). `'system'` defers to
+ * `AccessibilityInfo.isReduceMotionEnabled`; `'on'` forces reduced motion even when the OS
+ * setting is off; `'off'` forces full motion even when the OS setting is on. See
+ * `src/anim/useReduceMotion.ts`, the only place that reads this.
+ */
+export type ReduceMotionPreference = 'system' | 'on' | 'off';
+
 export interface Settings {
   workMinutes: number;
   shortBreakMinutes: number;
   longBreakMinutes: number;
   hapticsEnabled: boolean;
   notificationsEnabled: boolean;
-  /** User override; the OS "Reduce Motion" setting is honoured independently of this. */
-  reduceMotion: boolean;
+  reduceMotion: ReduceMotionPreference;
 }
 
 export interface Stats {

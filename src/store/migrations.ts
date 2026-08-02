@@ -8,7 +8,7 @@ import type { PersistedState } from './types';
  * matching entry to `migrations`. Versioned from commit one on purpose (docs/PLAN.md M0) —
  * retrofitting migrations onto already-shipped user data is the expensive version of this problem.
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /** The placeholder species id shipped in the v1 default `entitlements.unlockedSpeciesIds`. It
  *  never matched a real species — the species catalog did not exist until M2 — so any stored copy
@@ -51,6 +51,31 @@ export const migrations: Record<number, Migration> = {
         ...s.entitlements,
         unlockedSpeciesIds: Array.from(new Set(remapped)),
         unlockedTankIds: s.entitlements?.unlockedTankIds ?? ['rectangular'],
+      },
+    };
+  },
+
+  /**
+   * v2 → v3 (M5). `settings.reduceMotion` changes from a boolean ("also force reduced motion on
+   * top of whatever the OS says") to a tri-state preference — `'system' | 'on' | 'off'` — so a
+   * user can force *full* motion even when the OS's own Reduce Motion setting is on, not just
+   * force reduced motion on. See `src/anim/useReduceMotion.ts`.
+   *
+   * A stored `true` becomes `'on'`. A stored `false` (or anything else — missing, corrupt) becomes
+   * `'system'`, never `'off'`: v2's `false` only ever meant "no extra override on top of the OS
+   * setting", and `'off'` is a new capability ("ignore the OS setting entirely") that no v2
+   * payload could have meant, so mapping `false` to it would silently change behaviour for anyone
+   * who has the OS setting on.
+   */
+  2: (state) => {
+    if (typeof state !== 'object' || state === null) return state;
+    const s = state as Record<string, unknown>;
+    const storedSettings = (s.settings ?? {}) as Record<string, unknown>;
+    return {
+      ...s,
+      settings: {
+        ...storedSettings,
+        reduceMotion: storedSettings.reduceMotion === true ? 'on' : 'system',
       },
     };
   },

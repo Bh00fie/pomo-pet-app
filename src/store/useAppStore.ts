@@ -55,7 +55,7 @@ const initialPersisted: PersistedState = {
     longBreakMinutes: TIMER.defaultLongBreakMinutes,
     hapticsEnabled: true,
     notificationsEnabled: true,
-    reduceMotion: false,
+    reduceMotion: 'system',
   },
   stats: {
     totalFocusMs: 0,

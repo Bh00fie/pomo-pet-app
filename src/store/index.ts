@@ -13,6 +13,7 @@ export type {
   FishHealth,
   SpeciesId,
   Settings,
+  ReduceMotionPreference,
   Stats,
   Entitlements,
   PersistedState,

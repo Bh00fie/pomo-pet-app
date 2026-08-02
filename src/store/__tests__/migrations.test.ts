@@ -72,12 +72,12 @@ describe('migrate', () => {
     expect(noEntitlements.entitlements.unlockedTankIds).toEqual(['rectangular']);
   });
 
-  it('leaves every other persisted slice untouched', () => {
+  it('leaves every other persisted slice untouched (except settings.reduceMotion, migrated separately by step 2)', () => {
     const before = v1State({ onboardingCompletedAt: 12345 }) as PersistedState;
     const after = migrate(before, 1);
 
     expect(after.fish).toEqual(before.fish);
-    expect(after.settings).toEqual(before.settings);
+    expect(after.settings).toEqual({ ...before.settings, reduceMotion: 'system' });
     expect(after.stats).toEqual(before.stats);
     expect(after.onboardingCompletedAt).toBe(12345);
   });
@@ -97,5 +97,65 @@ describe('migrate', () => {
     expect(migrate(v1State(), 0)).toBe(DISCARD);
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+/** A realistic v2 payload: the shape the store persisted from M2 through M4, with the already-
+ *  corrected starter species id and the boolean `reduceMotion` that migration 2 (M5) rewrites. */
+function v2State(overrides: Record<string, unknown> = {}): unknown {
+  return {
+    fish: [],
+    settings: {
+      workMinutes: 25,
+      shortBreakMinutes: 5,
+      longBreakMinutes: 15,
+      hapticsEnabled: true,
+      notificationsEnabled: true,
+      reduceMotion: false,
+    },
+    stats: {
+      totalFocusMs: 0,
+      completedSessions: 0,
+      abandonedSessions: 0,
+      currentStreak: 0,
+      longestStreak: 0,
+      lastCompletedLocalDate: null,
+      focusMsByDate: {},
+    },
+    entitlements: { unlockedSpeciesIds: [STARTER_SPECIES_ID], unlockedTankIds: ['rectangular'] },
+    onboardingCompletedAt: null,
+    ...overrides,
+  };
+}
+
+describe('migrate — v2 -> v3, reduceMotion tri-state (M5)', () => {
+  it('rewrites a stored `true` to the "on" preference', () => {
+    const result = migrate(v2State({ settings: { reduceMotion: true } }), 2);
+    expect(result.settings.reduceMotion).toBe('on');
+  });
+
+  it('rewrites a stored `false` to "system", not "off" — v2 never meant "ignore the OS setting"', () => {
+    const result = migrate(v2State({ settings: { reduceMotion: false } }), 2);
+    expect(result.settings.reduceMotion).toBe('system');
+  });
+
+  it('defaults to "system" when the field is missing or the settings object is absent', () => {
+    const missingField = migrate(v2State({ settings: {} }), 2);
+    expect(missingField.settings.reduceMotion).toBe('system');
+
+    const missingSettings = migrate(v2State({ settings: undefined }), 2);
+    expect(missingSettings.settings.reduceMotion).toBe('system');
+  });
+
+  it('leaves every other settings field untouched', () => {
+    const before = v2State() as PersistedState;
+    const after = migrate(before, 2);
+    expect(after.settings).toEqual({ ...before.settings, reduceMotion: 'system' });
+  });
+
+  it('walking from v1 all the way to v3 applies both migrations in order', () => {
+    const result = migrate(v1State({ settings: { reduceMotion: true } }), 1);
+    expect(result.entitlements.unlockedSpeciesIds).toEqual([STARTER_SPECIES_ID]);
+    expect(result.settings.reduceMotion).toBe('on');
   });
 });
