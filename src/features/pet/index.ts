@@ -18,5 +18,8 @@ export { xpForFocusMs, applySessionReward } from './reward';
 export type { SessionRewardInput, SessionRewardResult } from './reward';
 export { evaluateMerge, isMergeEligibleStage } from './merge';
 export type { MergeInput, MergeResult, MergeSuccess, MergeRejection, MergeRejectionReason } from './merge';
+export { applyPenalty } from './penalty';
+export type { PenaltyInput, PenaltyResult } from './penalty';
 export { generateFishId } from './id';
 export { useSessionReward } from './useSessionReward';
+export { useLeaveEarlyPenalty } from './useLeaveEarlyPenalty';

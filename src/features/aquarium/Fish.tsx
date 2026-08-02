@@ -2,7 +2,7 @@ import { Circle, Group, Oval, Path, Skia, type SkPath } from '@shopify/react-nat
 import { useMemo } from 'react';
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
 
-import { AQUARIUM } from '@/config';
+import { AQUARIUM, HEALTH } from '@/config';
 import { buildFishGeometry, getSpecies, hslToHex, type FinShape, type Fish } from '@/features/pet';
 import { colors } from '@/theme';
 import type { FishKinematics } from './steering';
@@ -52,23 +52,35 @@ export function FishSprite({ fish, kinematics, elapsed, seed }: FishSpriteProps)
   const phase = useMemo(() => (seed * PHASE_SPREAD * Math.PI * 2) % (Math.PI * 2), [seed]);
   const speedFactor = useMemo(() => 0.55 + ((seed * 7) % 5) / 5, [seed]);
 
+  // Sick (docs/PLAN.md M4 leave-early penalty): desaturate rather than recolor, so the species'
+  // own hue is still recognizable — a fish "looks ill", not like a different fish. Every color
+  // below derives from `effectiveSaturation` instead of `species.saturation` directly, so the
+  // desaturation is consistent across body/shade/belly.
   const isSick = fish.health === 'sick';
-  const bodyColor = isSick ? colors.sick : hslToHex(species.hue, species.saturation, species.lightness);
-  const bodyShade = isSick
-    ? '#4A555C'
-    : hslToHex(species.hue, species.saturation, Math.max(species.lightness - 20, 8));
-  const belly = isSick
-    ? '#8A97A0'
-    : hslToHex(species.hue, Math.max(species.saturation - 32, 8), Math.min(species.lightness + 30, 92));
+  const effectiveSaturation = isSick
+    ? species.saturation * HEALTH.sickSaturationMultiplier
+    : species.saturation;
+
+  const bodyColor = hslToHex(species.hue, effectiveSaturation, species.lightness);
+  const bodyShade = hslToHex(species.hue, effectiveSaturation, Math.max(species.lightness - 20, 8));
+  const belly = hslToHex(
+    species.hue,
+    Math.max(effectiveSaturation - 32, 8),
+    Math.min(species.lightness + 30, 92),
+  );
+
+  // Sluggish swim (docs/PLAN.md M4): a lower tail-wag frequency, not a color change alone, is
+  // what makes the animation itself read as unwell.
+  const wagFrequency = AQUARIUM.tailWagFrequency * (isSick ? HEALTH.sickTailWagMultiplier : 1);
 
   const { x, y, vx } = kinematics;
 
   const dir = useDerivedValue(() => (vx.value < 0 ? -1 : 1));
   const wag = useDerivedValue(
-    () => Math.sin(elapsed.value * speedFactor * AQUARIUM.tailWagFrequency + phase),
+    () => Math.sin(elapsed.value * speedFactor * wagFrequency + phase),
   );
   const bodyWag = useDerivedValue(
-    () => Math.sin(elapsed.value * speedFactor * AQUARIUM.tailWagFrequency + phase - 0.6) * 0.1,
+    () => Math.sin(elapsed.value * speedFactor * wagFrequency + phase - 0.6) * 0.1,
   );
   const bob = useDerivedValue(
     () => Math.sin(elapsed.value * AQUARIUM.bob.speedHz * Math.PI * 2 + phase) * AQUARIUM.bob.amplitudePx,

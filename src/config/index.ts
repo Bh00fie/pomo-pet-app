@@ -57,6 +57,18 @@ export const GROWTH = {
   fishPerMerge: 3,
 } as const;
 
+export const HEALTH = {
+  /**
+   * Multiplier applied to a sick fish's saturation (docs/PLAN.md M4) — desaturation, not a flat
+   * recolor, is the visual tell that the leave-early penalty actually harmed a fish. Applied to
+   * every color derived from the species' base saturation (`src/features/aquarium/Fish.tsx`).
+   */
+  sickSaturationMultiplier: 0.3,
+  /** Multiplier on `AQUARIUM.tailWagFrequency` for a sick fish — a slower wag is what makes the
+   *  swim read as sluggish rather than merely a different color. */
+  sickTailWagMultiplier: 0.4,
+} as const;
+
 export const STAGES = ['fry', 'juvenile', 'elder'] as const;
 export type StageId = (typeof STAGES)[number];
 

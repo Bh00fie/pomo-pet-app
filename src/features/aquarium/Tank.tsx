@@ -1,11 +1,18 @@
 import { Canvas, Group, Rect } from '@shopify/react-native-skia';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
-import { makeMutable, useDerivedValue, useSharedValue, type SharedValue } from 'react-native-reanimated';
+import {
+  makeMutable,
+  useDerivedValue,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  type SharedValue,
+} from 'react-native-reanimated';
 
-import { useAquariumClock, useReduceMotion } from '@/anim';
+import { springs, useAquariumClock, useReduceMotion } from '@/anim';
 import { AQUARIUM, GROWTH } from '@/config';
-import { getSpecies, isMergeEligibleStage, type Fish, type MergeResult } from '@/features/pet';
+import { getSpecies, isMergeEligibleStage, type Fish, type FishHealth, type MergeResult } from '@/features/pet';
 import { useAppStore } from '@/store';
 import { colors } from '@/theme';
 import { FishTapTarget } from './FishTapTarget';
@@ -112,9 +119,37 @@ export const Tank = forwardRef<TankHandle, TankProps>(function Tank({ fish, onSe
   const frozenFishIdSV = useSharedValue('');
   const revealScaleSV = useSharedValue(1);
 
+  // M4 leave-early penalty reaction: a brief, damped "wince" (`springs.penalty` — deliberately
+  // overdamped, no overshoot, the inverse feeling from the merge reveal's `springs.celebrate`)
+  // played on whichever fish transitions healthy -> sick. Same single-shared-value pattern as
+  // the merge freeze/reveal above: at most one fish reacts at a time, so an id + scale pair is
+  // enough, no per-fish map needed.
+  const reactingFishIdSV = useSharedValue('');
+  const reactionScaleSV = useSharedValue(1);
+  const prevHealthRef = useRef<Map<string, FishHealth>>(new Map());
+
   useEffect(() => {
     onSelectionChange?.(selectedIds);
   }, [selectedIds, onSelectionChange]);
+
+  useEffect(() => {
+    const prevHealth = prevHealthRef.current;
+    if (!reduceMotion) {
+      for (const f of fish) {
+        if (prevHealth.get(f.id) === 'healthy' && f.health === 'sick') {
+          reactingFishIdSV.value = f.id;
+          reactionScaleSV.value = withSequence(
+            withSpring(0.82, springs.penalty),
+            withSpring(1, springs.penalty, (finished) => {
+              if (finished) reactingFishIdSV.value = '';
+            }),
+          );
+          break; // only one fish is ever penalized per event
+        }
+      }
+    }
+    prevHealthRef.current = new Map(fish.map((f) => [f.id, f.health]));
+  }, [fish, reduceMotion, reactingFishIdSV, reactionScaleSV]);
 
   const entries: TankFishEntry[] = useMemo(() => {
     if (size.width <= 0 || size.height <= 0) return [];
@@ -279,6 +314,8 @@ export const Tank = forwardRef<TankHandle, TankProps>(function Tank({ fish, onSe
               elapsed={elapsed}
               frozenFishIdSV={frozenFishIdSV}
               revealScaleSV={revealScaleSV}
+              reactingFishIdSV={reactingFishIdSV}
+              reactionScaleSV={reactionScaleSV}
             />
           ))}
           {pendingMerge && (
@@ -328,17 +365,23 @@ function AnimatedFishEntry({
   elapsed,
   frozenFishIdSV,
   revealScaleSV,
+  reactingFishIdSV,
+  reactionScaleSV,
 }: {
   entry: TankFishEntry;
   elapsed: SharedValue<number>;
   frozenFishIdSV: SharedValue<string>;
   revealScaleSV: SharedValue<number>;
+  reactingFishIdSV: SharedValue<string>;
+  reactionScaleSV: SharedValue<number>;
 }) {
   const { fish, kinematics, seed } = entry;
 
-  const transform = useDerivedValue(() => [
-    { scale: frozenFishIdSV.value === fish.id ? revealScaleSV.value : 1 },
-  ]);
+  const transform = useDerivedValue(() => {
+    const mergeScale = frozenFishIdSV.value === fish.id ? revealScaleSV.value : 1;
+    const penaltyScale = reactingFishIdSV.value === fish.id ? reactionScaleSV.value : 1;
+    return [{ scale: mergeScale * penaltyScale }];
+  });
   const origin = useDerivedValue(() => ({ x: kinematics.x.value, y: kinematics.y.value }));
 
   return (

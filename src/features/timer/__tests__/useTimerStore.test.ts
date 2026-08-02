@@ -1,3 +1,4 @@
+import { ACCOUNTABILITY } from '@/config';
 import { useAppStore } from '@/store';
 import { createTimerState } from '../machine';
 import { cancelSessionEndNotification, scheduleSessionEndNotification } from '../notifications';
@@ -33,7 +34,12 @@ beforeEach(() => {
   useAppStore.setState((s) => ({
     settings: { ...s.settings, workMinutes: 25, shortBreakMinutes: 5, notificationsEnabled: true },
   }));
-  useTimerStore.setState({ timer: createTimerState('focus', 25 * MINUTE), notificationId: null });
+  useTimerStore.setState({
+    timer: createTimerState('focus', 25 * MINUTE),
+    notificationId: null,
+    backgroundedAt: null,
+    lastPenaltyToken: 0,
+  });
 });
 
 afterEach(() => {
@@ -142,6 +148,99 @@ describe('reset / abandon / tick', () => {
     await flush();
     expect(useTimerStore.getState().timer.status).toBe('completed');
     expect(cancel).toHaveBeenCalledWith('scheduled-id');
+  });
+});
+
+describe('noteBackgrounded / resolveForeground (docs/PLAN.md M4 leave-early penalty)', () => {
+  it('records an absolute backgroundedAt timestamp only while a session is running', () => {
+    useTimerStore.getState().noteBackgrounded(NOW); // idle — no-op
+    expect(useTimerStore.getState().backgroundedAt).toBeNull();
+
+    useTimerStore.getState().start();
+    useTimerStore.getState().noteBackgrounded(NOW + 5_000);
+    expect(useTimerStore.getState().backgroundedAt).toBe(NOW + 5_000);
+  });
+
+  it('does not overwrite an already-open backgrounded excursion (e.g. a brief `inactive` blip in between)', () => {
+    useTimerStore.getState().start();
+    useTimerStore.getState().noteBackgrounded(NOW + 1_000);
+    useTimerStore.getState().noteBackgrounded(NOW + 4_000); // second call while still open
+    expect(useTimerStore.getState().backgroundedAt).toBe(NOW + 1_000);
+  });
+
+  it('does not track backgrounding during a break — stepping away is the point of a break', async () => {
+    useTimerStore.getState().start({ mode: 'break' });
+    await flush();
+
+    useTimerStore.getState().noteBackgrounded(NOW + 1_000);
+    expect(useTimerStore.getState().backgroundedAt).toBeNull();
+
+    useTimerStore.getState().resolveForeground(NOW + 1_000 + ACCOUNTABILITY.backgroundGraceMs + 1);
+    expect(useTimerStore.getState().timer.status).toBe('running');
+    expect(useTimerStore.getState().lastPenaltyToken).toBe(0);
+  });
+
+  it('does not track backgrounding while paused', async () => {
+    useTimerStore.getState().start();
+    await flush();
+    useTimerStore.getState().pause();
+    await flush();
+
+    useTimerStore.getState().noteBackgrounded(NOW + 1_000);
+    expect(useTimerStore.getState().backgroundedAt).toBeNull();
+  });
+
+  it('does nothing on foreground when there was no open background excursion', () => {
+    useTimerStore.getState().start();
+    useTimerStore.getState().resolveForeground(NOW + 1_000);
+
+    expect(useTimerStore.getState().timer.status).toBe('running');
+    expect(useTimerStore.getState().lastPenaltyToken).toBe(0);
+  });
+
+  it('does not penalize a brief excursion under the grace period', () => {
+    useTimerStore.getState().start();
+    useTimerStore.getState().noteBackgrounded(NOW + 1_000);
+    useTimerStore.getState().resolveForeground(NOW + 1_000 + ACCOUNTABILITY.backgroundGraceMs - 1);
+
+    expect(useTimerStore.getState().timer.status).toBe('running');
+    expect(useTimerStore.getState().lastPenaltyToken).toBe(0);
+    expect(useTimerStore.getState().backgroundedAt).toBeNull(); // cleared regardless
+  });
+
+  it('auto-abandons and bumps lastPenaltyToken once the grace period is exceeded', async () => {
+    useTimerStore.getState().start();
+    await flush();
+
+    useTimerStore.getState().noteBackgrounded(NOW + 1_000);
+    useTimerStore.getState().resolveForeground(NOW + 1_000 + ACCOUNTABILITY.backgroundGraceMs + 1);
+
+    expect(useTimerStore.getState().timer.status).toBe('abandoned');
+    expect(useTimerStore.getState().lastPenaltyToken).toBe(1);
+  });
+
+  it('never penalizes a session whose natural endsAt had already passed while backgrounded (M1 "lock your phone" flow)', () => {
+    useTimerStore.getState().start(); // 25-minute focus session
+
+    // Backgrounded for the entire session and well beyond the grace period, but the session's
+    // own endsAt was reached while away — that is a normal completion, not a penalty.
+    useTimerStore.getState().noteBackgrounded(NOW + MINUTE);
+    useTimerStore.getState().resolveForeground(NOW + 26 * MINUTE);
+
+    expect(useTimerStore.getState().timer.status).toBe('completed');
+    expect(useTimerStore.getState().lastPenaltyToken).toBe(0);
+  });
+
+  it('does not double-penalize across repeated foreground events for the same excursion', () => {
+    useTimerStore.getState().start();
+    useTimerStore.getState().noteBackgrounded(NOW + 1_000);
+    useTimerStore.getState().resolveForeground(NOW + 1_000 + ACCOUNTABILITY.backgroundGraceMs + 1);
+    expect(useTimerStore.getState().lastPenaltyToken).toBe(1);
+
+    // A second `active` event with no new backgroundedAt in between must not re-penalize —
+    // the session is already `abandoned`, not `running`.
+    useTimerStore.getState().resolveForeground(NOW + 1_000 + ACCOUNTABILITY.backgroundGraceMs + 5_000);
+    expect(useTimerStore.getState().lastPenaltyToken).toBe(1);
   });
 });
 

@@ -7,7 +7,9 @@ import { APP, TIMER } from '@/config';
 import { generateFishId } from '@/features/pet/id';
 import { evaluateMerge, type MergeResult } from '@/features/pet/merge';
 import { STARTER_SPECIES_ID } from '@/features/pet/model';
+import { applyPenalty } from '@/features/pet/penalty';
 import { applySessionReward } from '@/features/pet/reward';
+import { applyCompletedSessionToStreak, toLocalDateString } from '@/features/streak';
 import { SCHEMA_VERSION, migrate } from './migrations';
 import { asyncStorageJSON } from './storage';
 import type { PersistedState, Settings } from './types';
@@ -19,6 +21,14 @@ interface AppActions {
    *  spawns a starter Fry if the user has none yet. Called by `useSessionReward` on the timer
    *  engine's `completed` transition. */
   awardSessionCompletion: (focusMs: number, now: number) => void;
+  /**
+   * Applies the M4 leave-early penalty (docs/PLAN.md M4): marks the same fish a completed
+   * session would have grown as `sick` instead, and counts the session as abandoned in stats.
+   * Called from `useLeaveEarlyPenalty` exactly when the timer engine auto-abandons a running
+   * session for staying backgrounded past `ACCOUNTABILITY.backgroundGraceMs` — never for a
+   * manual "Give up", which already withholds the reward on its own.
+   */
+  penalizeAbandonedSession: (now: number) => void;
   /**
    * Evaluates and, if legal, atomically applies a merge (docs/PLAN.md M3): combining
    * `GROWTH.fishPerMerge` same-stage, same-species fish into one fish of the next stage. Always
@@ -80,7 +90,42 @@ export const useAppStore = create<AppStore>()(
             now,
             idFactory: () => generateFishId(now),
           });
-          return { fish: result.fish };
+
+          // Streak + basic stats update alongside the fish reward, in the same `set` — one
+          // completed session, one write, so the two can never drift out of sync from two
+          // separately-tested code paths (docs/PLAN.md M4).
+          const streak = applyCompletedSessionToStreak({
+            lastCompletedLocalDate: s.stats.lastCompletedLocalDate,
+            currentStreak: s.stats.currentStreak,
+            longestStreak: s.stats.longestStreak,
+            now: new Date(now),
+          });
+          const dateKey = toLocalDateString(new Date(now));
+
+          return {
+            fish: result.fish,
+            stats: {
+              ...s.stats,
+              totalFocusMs: s.stats.totalFocusMs + focusMs,
+              completedSessions: s.stats.completedSessions + 1,
+              focusMsByDate: {
+                ...s.stats.focusMsByDate,
+                [dateKey]: (s.stats.focusMsByDate[dateKey] ?? 0) + focusMs,
+              },
+              currentStreak: streak.currentStreak,
+              longestStreak: streak.longestStreak,
+              lastCompletedLocalDate: streak.lastCompletedLocalDate,
+            },
+          };
+        }),
+
+      penalizeAbandonedSession: (_now) =>
+        set((s) => {
+          const result = applyPenalty({ fish: s.fish });
+          return {
+            fish: result.fish,
+            stats: { ...s.stats, abandonedSessions: s.stats.abandonedSessions + 1 },
+          };
         }),
 
       mergeFish: (selectedIds, now) => {

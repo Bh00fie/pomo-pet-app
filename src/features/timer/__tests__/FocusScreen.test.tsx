@@ -5,7 +5,10 @@
  */
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
+import { AppState } from 'react-native';
 
+import { ACCOUNTABILITY } from '@/config';
+import { useLeaveEarlyPenalty } from '@/features/pet';
 import { useAppStore } from '@/store';
 import { FocusScreen } from '../FocusScreen';
 import { createTimerState } from '../machine';
@@ -29,15 +32,33 @@ const advance = async (ms: number) => {
   });
 };
 
+/** Simulates the OS delivering an `AppState` `'change'` event, using the listener the mounted
+ *  screen actually registered — the real RN jest mock's `addEventListener` never fires on its
+ *  own (see `node_modules/react-native/jest/mocks/AppState.js`), so tests have to invoke the
+ *  captured callback directly to exercise the M4 background/foreground handling. */
+const fireAppStateChange = async (next: 'active' | 'background' | 'inactive') => {
+  const addEventListener = AppState.addEventListener as jest.Mock;
+  const handler = addEventListener.mock.calls.find(([event]) => event === 'change')?.[1];
+  await act(async () => {
+    handler?.(next);
+  });
+};
+
 beforeEach(() => {
   jest.useFakeTimers();
   jest.setSystemTime(NOW);
+  (AppState.addEventListener as jest.Mock).mockClear();
 
   useAppStore.setState((s) => ({
     hydrated: true,
     settings: { ...s.settings, workMinutes: 25, shortBreakMinutes: 5, notificationsEnabled: true },
   }));
-  useTimerStore.setState({ timer: createTimerState('focus', 25 * MINUTE), notificationId: null });
+  useTimerStore.setState({
+    timer: createTimerState('focus', 25 * MINUTE),
+    notificationId: null,
+    backgroundedAt: null,
+    lastPenaltyToken: 0,
+  });
 });
 
 afterEach(() => {
@@ -171,5 +192,76 @@ describe('FocusScreen', () => {
 
     expect(screen.getByText('10:00')).toBeTruthy();
     expect(useTimerStore.getState().timer.status).toBe('running');
+  });
+
+  describe('leave-early penalty (docs/PLAN.md M4) — real AppState events, mocked Date.now()', () => {
+    it('does not penalize a brief `background` excursion under the grace period', async () => {
+      await render(<FocusScreen />);
+      await fireEvent.press(screen.getByText('Start focus session'));
+
+      await fireAppStateChange('background');
+      await act(async () => {
+        jest.setSystemTime(NOW + ACCOUNTABILITY.backgroundGraceMs - 500);
+      });
+      await fireAppStateChange('active');
+
+      expect(useTimerStore.getState().timer.status).toBe('running');
+      expect(screen.queryByText('SESSION ABANDONED')).toBeNull();
+    });
+
+    it('never penalizes on `inactive` alone, no matter how long it lasts', async () => {
+      await render(<FocusScreen />);
+      await fireEvent.press(screen.getByText('Start focus session'));
+
+      await fireAppStateChange('inactive');
+      await act(async () => {
+        jest.setSystemTime(NOW + 5 * MINUTE); // well past the grace period
+      });
+      await fireAppStateChange('active');
+
+      expect(useTimerStore.getState().timer.status).toBe('running');
+    });
+
+    it('abandons the session and marks a fish sick after sustained backgrounding past the grace period', async () => {
+      // `useLeaveEarlyPenalty` is normally mounted once at the app root (`app/_layout.tsx`),
+      // same as `useSessionReward` — mount it alongside the screen here so this test can observe
+      // the actual fish-sickening consequence, not just the timer's `abandoned` transition.
+      function Harness() {
+        useLeaveEarlyPenalty();
+        return <FocusScreen />;
+      }
+
+      useAppStore.getState().resetAll();
+      useAppStore.getState().awardSessionCompletion(MINUTE, NOW - MINUTE); // seed one healthy fish
+      const fishId = useAppStore.getState().fish[0].id;
+
+      await render(<Harness />);
+      await fireEvent.press(screen.getByText('Start focus session'));
+
+      await fireAppStateChange('background');
+      await act(async () => {
+        jest.setSystemTime(NOW + ACCOUNTABILITY.backgroundGraceMs + 1_000);
+      });
+      await fireAppStateChange('active');
+
+      expect(useTimerStore.getState().timer.status).toBe('abandoned');
+      expect(screen.getByText('SESSION ABANDONED')).toBeTruthy();
+      expect(useAppStore.getState().fish.find((f) => f.id === fishId)?.health).toBe('sick');
+      expect(useAppStore.getState().stats.abandonedSessions).toBe(1);
+    });
+
+    it('does not penalize when the session finished naturally while backgrounded (locking the phone for the whole session)', async () => {
+      await render(<FocusScreen />);
+      await fireEvent.press(screen.getByText('Start focus session'));
+
+      await fireAppStateChange('background');
+      await act(async () => {
+        jest.setSystemTime(NOW + 26 * MINUTE); // past the full 25-minute session length
+      });
+      await fireAppStateChange('active');
+
+      expect(useTimerStore.getState().timer.status).toBe('completed');
+      expect(screen.queryByText('SESSION ABANDONED')).toBeNull();
+    });
   });
 });

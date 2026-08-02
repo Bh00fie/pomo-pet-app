@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { TIMER } from '@/config';
-import { selectHydrated, selectSettings, useAppStore } from '@/store';
+import { selectHydrated, selectSettings, selectStats, useAppStore } from '@/store';
 import { colors, radius, spacing } from '@/theme';
 import { Button, Card, Screen, Text } from '@/ui';
 import { isAtSessionBound, stepSessionMinutes } from './durations';
@@ -16,6 +16,7 @@ export function FocusScreen() {
   const hydrated = useAppStore(selectHydrated);
   const settings = useAppStore(selectSettings);
   const setSettings = useAppStore((s) => s.setSettings);
+  const stats = useAppStore(selectStats);
   const timer = useTimer();
 
   const otherMode: TimerMode = timer.mode === 'focus' ? 'break' : 'focus';
@@ -26,6 +27,12 @@ export function FocusScreen() {
         <Text variant="caption" color={timer.isRunning ? 'kelp' : 'textMuted'}>
           {statusLabel(timer.mode, timer.status)}
         </Text>
+
+        {stats.currentStreak > 0 && (
+          <Text variant="caption" color="sun">
+            {stats.currentStreak}-day streak
+          </Text>
+        )}
 
         <Text variant="display">{timer.clock}</Text>
 
@@ -114,7 +121,9 @@ function statusLabel(mode: TimerMode, status: string): string {
 function sessionHint(status: string, mode: TimerMode): string {
   switch (status) {
     case 'running':
-      return 'You can lock your phone — the timer runs on wall-clock time and a notification fires when it ends.';
+      return mode === 'focus'
+        ? 'Stay in the app. Stepping away for more than a few seconds marks a fish sick, even if you come back before the timer ends.'
+        : 'The timer runs on wall-clock time and a notification fires when it ends.';
     case 'paused':
       return 'Paused. Remaining time is held exactly where you left it.';
     case 'completed':

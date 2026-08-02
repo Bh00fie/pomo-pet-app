@@ -60,6 +60,8 @@ export function useTimer(): UseTimerResult {
   const abandonSession = useTimerStore((s) => s.abandon);
   const tick = useTimerStore((s) => s.tick);
   const syncFromSettings = useTimerStore((s) => s.syncFromSettings);
+  const noteBackgrounded = useTimerStore((s) => s.noteBackgrounded);
+  const resolveForeground = useTimerStore((s) => s.resolveForeground);
 
   const settings = useAppStore(selectSettings);
   const [now, setNow] = useState(() => Date.now());
@@ -90,17 +92,28 @@ export function useTimer(): UseTimerResult {
     return () => clearInterval(id);
   }, [timer.status, timer.endsAt, tick]);
 
-  // Returning from the background: read the clock once. If the session ended while we were away,
-  // this is what flips it to `completed` — the interval was not running to notice.
+  // AppState transitions (docs/PLAN.md M1 + M4). Both directions use absolute timestamps read
+  // from `Date.now()` at the moment of the transition — never a `setTimeout` trusted to fire
+  // while backgrounded, which is exactly the lesson M1 already learned about JS timers.
+  //
+  // `'background'`: record when a running session left, so the M4 grace period can be measured
+  // on return. `'active'`: always fold the clock in first (this is what flips a session that
+  // finished while backgrounded to `completed` — the interval was not running to notice), then
+  // `resolveForeground` decides whether the excursion was long enough to auto-abandon.
+  // `'inactive'` (Control Center, notification shade, incoming call, app-switcher peek) is
+  // deliberately ignored on both sides — only sustained `background` ever counts.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (next) => {
-      if (next !== 'active') return;
       const current = Date.now();
-      setNow(current);
-      tick(current);
+      if (next === 'active') {
+        setNow(current);
+        resolveForeground(current);
+      } else if (next === 'background') {
+        noteBackgrounded(current);
+      }
     });
     return () => subscription.remove();
-  }, [tick]);
+  }, [resolveForeground, noteBackgrounded]);
 
   const start = useCallback((mode?: TimerMode) => startSession(mode ? { mode } : undefined), [startSession]);
   const setMode = useCallback((mode: TimerMode) => resetSession({ mode }), [resetSession]);

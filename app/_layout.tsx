@@ -3,13 +3,15 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { useSessionReward } from '@/features/pet';
+import { useLeaveEarlyPenalty, useSessionReward } from '@/features/pet';
 import { colors } from '@/theme';
 
-/** Renders nothing — mounts the M2 session→reward bridge at the app root so a focus session that
- *  completes while the user is on another tab still grows/spawns a fish. See useSessionReward.ts. */
+/** Renders nothing — mounts the M2 session→reward bridge and the M4 leave-early-penalty bridge
+ *  at the app root, so a session that completes or gets auto-abandoned while the user is on
+ *  another tab still lands. See useSessionReward.ts / useLeaveEarlyPenalty.ts. */
 function SessionRewardBridge() {
   useSessionReward();
+  useLeaveEarlyPenalty();
   return null;
 }
 

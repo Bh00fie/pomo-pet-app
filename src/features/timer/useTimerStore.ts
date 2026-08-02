@@ -9,7 +9,7 @@
  */
 import { create } from 'zustand';
 
-import { TIMER } from '@/config';
+import { ACCOUNTABILITY, TIMER } from '@/config';
 import { useAppStore } from '@/store';
 import { minutesToMs } from './durations';
 import {
@@ -25,6 +25,21 @@ interface TimerStore {
   timer: TimerState;
   /** Identifier of the notification currently scheduled for `timer.endsAt`, if any. */
   notificationId: string | null;
+  /**
+   * Wall-clock ms at which the app last transitioned to `background` while a session was
+   * `running` (docs/PLAN.md M4). An absolute timestamp, exactly like `endsAt` — never a
+   * `setTimeout` trusted to fire while backgrounded, that's the exact M1 lesson this reuses.
+   * `null` whenever there is no open background excursion to resolve.
+   */
+  backgroundedAt: number | null;
+  /**
+   * Bumped exactly once each time `resolveForeground` auto-abandons a still-running session for
+   * having stayed backgrounded past `ACCOUNTABILITY.backgroundGraceMs` — never for a manual
+   * "Give up", and never when the session had already legitimately finished while backgrounded.
+   * `useLeaveEarlyPenalty` watches this (not `timer.status === 'abandoned'`, which both paths
+   * produce) to know specifically when to sicken a fish.
+   */
+  lastPenaltyToken: number;
 
   dispatch: (event: TimerEvent) => void;
   start: (options?: { mode?: TimerMode; durationMs?: number }) => void;
@@ -36,6 +51,18 @@ interface TimerStore {
   tick: (now?: number) => void;
   /** While idle, keep the shown length in step with the user's configured work/break minutes. */
   syncFromSettings: () => void;
+  /** Call on an `AppState` transition to `'background'` while `running` (docs/PLAN.md M4).
+   *  Records the absolute timestamp; a no-op if not running or an excursion is already open. */
+  noteBackgrounded: (now?: number) => void;
+  /**
+   * Call on an `AppState` transition to `'active'` (docs/PLAN.md M4). Always folds the wall
+   * clock in first — a session whose `endsAt` had already passed while backgrounded is a normal
+   * completion no matter how long the app was away, exactly the M1 "you can lock your phone"
+   * flow. Only if the session is *still* `running` after that, and the backgrounded excursion
+   * exceeded `ACCOUNTABILITY.backgroundGraceMs`, does it auto-abandon and bump
+   * `lastPenaltyToken`.
+   */
+  resolveForeground: (now?: number) => void;
 }
 
 /** Session length for a mode, straight from user settings. */
@@ -76,6 +103,8 @@ export const useTimerStore = create<TimerStore>()((set, get) => {
   return {
     timer: createTimerState('focus', minutesToMs(TIMER.defaultWorkMinutes)),
     notificationId: null,
+    backgroundedAt: null,
+    lastPenaltyToken: 0,
 
     dispatch: (event) => {
       const before = get().timer;
@@ -113,6 +142,39 @@ export const useTimerStore = create<TimerStore>()((set, get) => {
       const durationMs = durationMsForMode(timer.mode);
       if (durationMs === timer.durationMs) return;
       get().dispatch({ type: 'RESET', mode: timer.mode, durationMs });
+    },
+
+    noteBackgrounded: (now = Date.now()) => {
+      const { timer, backgroundedAt } = get();
+      // Only a running session can be left early; an already-open excursion is not overwritten
+      // (a background->inactive->background blip inside one excursion should not reset the
+      // clock the grace period is measured from). Focus only — stepping away during a break is
+      // the whole point of a break, never a penalty.
+      if (timer.status !== 'running' || timer.mode !== 'focus' || backgroundedAt !== null) return;
+      set({ backgroundedAt: now });
+    },
+
+    resolveForeground: (now = Date.now()) => {
+      const { backgroundedAt } = get();
+
+      // Always fold the clock in first, exactly like the plain foreground tick from M1 — if the
+      // session's own `endsAt` had already passed while backgrounded, that is a normal
+      // completion no matter how long the excursion was, never a penalty.
+      get().dispatch({ type: 'TICK', now });
+
+      if (backgroundedAt === null) return;
+      set({ backgroundedAt: null });
+
+      const elapsed = now - backgroundedAt;
+      if (elapsed <= ACCOUNTABILITY.backgroundGraceMs) return;
+
+      // If the tick above already completed (or the user somehow paused/reset/abandoned) the
+      // session, there is nothing left to penalize — only a session still `running` after the
+      // reconcile counts as "left early".
+      if (get().timer.status !== 'running') return;
+
+      get().dispatch({ type: 'ABANDON', now });
+      set((s) => ({ lastPenaltyToken: s.lastPenaltyToken + 1 }));
     },
   };
 });
