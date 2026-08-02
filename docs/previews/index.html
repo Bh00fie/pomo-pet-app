@@ -1,0 +1,1312 @@
+<!-- @dsCard group="Overview" -->
+<title>Pomo Pet — M0 + 3D Aquarium Review</title>
+<style>
+  /*
+ * Tokens are lifted verbatim from src/theme/ so these previews and the app cannot drift apart.
+ * The light theme is derived here (the app itself is dark-only for now).
+ */
+:root {
+  color-scheme: light dark;
+
+  /* app palette — src/theme/colors.ts */
+  --abyss: #04101a;
+  --deep: #07131f;
+  --surface: #0e2033;
+  --surface-raised: #16304a;
+  --coral: #ff8a65;
+  --coral-deep: #e5613c;
+  --kelp: #4fd1a5;
+  --sun: #ffd166;
+  --danger: #ff5c7a;
+  --sick: #6b7a85;
+
+  /* page chrome — light */
+  --page: #eef4f7;
+  --panel: #ffffff;
+  --panel-2: #f6fafc;
+  --ink: #08161f;
+  --ink-muted: #4a6478;
+  --ink-faint: #7d95a6;
+  --rule: rgba(10, 45, 65, 0.14);
+  --rule-strong: rgba(10, 45, 65, 0.26);
+  --accent: var(--coral-deep);
+  --good: #12805f;
+  --warn: #a86a12;
+
+  --measure: 66ch;
+  --step: clamp(0.75rem, 0.4rem + 1.1vw, 1.15rem);
+
+  --display: "Iowan Old Style", "Palatino Linotype", Palatino, "Hoefler Text", Georgia, serif;
+  --body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #061019;
+    --panel: #0c1c2b;
+    --panel-2: #0a1723;
+    --ink: #e6f1f8;
+    --ink-muted: #93aec4;
+    --ink-faint: #64809a;
+    --rule: rgba(147, 174, 196, 0.2);
+    --rule-strong: rgba(147, 174, 196, 0.36);
+    --accent: var(--coral);
+    --good: #4fd1a5;
+    --warn: #ffd166;
+  }
+}
+
+/* The viewer's own toggle must win over the OS preference, in both directions. */
+:root[data-theme="dark"] {
+  --page: #061019;
+  --panel: #0c1c2b;
+  --panel-2: #0a1723;
+  --ink: #e6f1f8;
+  --ink-muted: #93aec4;
+  --ink-faint: #64809a;
+  --rule: rgba(147, 174, 196, 0.2);
+  --rule-strong: rgba(147, 174, 196, 0.36);
+  --accent: var(--coral);
+  --good: #4fd1a5;
+  --warn: #ffd166;
+}
+
+:root[data-theme="light"] {
+  --page: #eef4f7;
+  --panel: #ffffff;
+  --panel-2: #f6fafc;
+  --ink: #08161f;
+  --ink-muted: #4a6478;
+  --ink-faint: #7d95a6;
+  --rule: rgba(10, 45, 65, 0.14);
+  --rule-strong: rgba(10, 45, 65, 0.26);
+  --accent: var(--coral-deep);
+  --good: #12805f;
+  --warn: #a86a12;
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: clamp(1.25rem, 4vw, 3rem) clamp(1rem, 4vw, 2.5rem) 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+/* A worksheet eyebrow: the reading, then what was read. */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  font-weight: 600;
+  text-wrap: balance;
+  margin: 0;
+  line-height: 1.15;
+}
+h1 { font-size: clamp(1.8rem, 1.1rem + 2.6vw, 2.9rem); letter-spacing: -0.015em; }
+h2 { font-size: clamp(1.25rem, 0.95rem + 1.1vw, 1.6rem); }
+h3 { font-size: 1.05rem; }
+
+p { margin: 0; max-width: var(--measure); }
+.muted { color: var(--ink-muted); }
+strong { font-weight: 650; }
+
+section { display: flex; flex-direction: column; gap: 1rem; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 1.15rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  width: fit-content;
+}
+.tag-good { color: var(--good); }
+.tag-warn { color: var(--warn); }
+.tag-info { color: var(--ink-faint); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+th,
+td { text-align: left; padding: 0.5rem 0.75rem 0.5rem 0; border-bottom: 1px solid var(--rule); }
+th {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-weight: 500;
+}
+td.num { text-align: right; padding-right: 0; font-family: var(--mono); }
+.scroll { overflow-x: auto; }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  background: var(--panel-2);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.05em 0.35em;
+}
+
+:where(a, button, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+  /*
+ * Device frame + in-app styling for the screen previews.
+ * The app is dark-only, so the phone interior stays dark in both page themes — only the page
+ * chrome around it follows the viewer's preference.
+ */
+.phone-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  align-items: flex-start;
+}
+
+.phone {
+  width: 300px;
+  flex: 0 0 300px;
+  border-radius: 34px;
+  padding: 8px;
+  background: linear-gradient(160deg, #22323f, #0b141b);
+  box-shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.75);
+}
+
+.screen {
+  border-radius: 27px;
+  overflow: hidden;
+  background: var(--deep);
+  color: #eaf4ff;
+  height: 620px;
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.status {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 20px 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #8fa9c2;
+  font-variant-numeric: tabular-nums;
+}
+
+.screen-body {
+  flex: 1;
+  padding: 16px 20px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+}
+
+.screen h4 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 21px;
+  font-weight: 600;
+  color: #eaf4ff;
+}
+
+.kicker {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #8fa9c2;
+  margin: 0;
+}
+
+.dial {
+  align-self: center;
+  width: 208px;
+  height: 208px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background:
+    conic-gradient(var(--coral) 0 62%, rgba(143, 169, 194, 0.18) 62% 100%);
+  position: relative;
+}
+.dial::after {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  border-radius: 50%;
+  background: var(--deep);
+}
+.dial-inner { position: relative; text-align: center; }
+.time {
+  font-family: var(--mono);
+  font-size: 44px;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.pill {
+  border: none;
+  border-radius: 999px;
+  padding: 12px 26px;
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: var(--coral);
+  color: #04101a;
+  align-self: center;
+}
+.pill.ghost { background: transparent; color: #eaf4ff; border: 1px solid rgba(143, 169, 194, 0.32); }
+
+.dots { display: flex; gap: 7px; justify-content: center; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(143, 169, 194, 0.3); }
+.dot.on { background: var(--kelp); }
+
+.tile {
+  background: var(--surface);
+  border: 1px solid rgba(143, 169, 194, 0.22);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tile .v { font-family: var(--mono); font-size: 22px; font-variant-numeric: tabular-nums; }
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.bars { display: flex; align-items: flex-end; gap: 8px; height: 92px; }
+.bars div {
+  flex: 1;
+  background: linear-gradient(180deg, var(--kelp), rgba(79, 209, 165, 0.25));
+  border-radius: 4px 4px 2px 2px;
+}
+.bar-labels {
+  display: flex;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: #5b7488;
+}
+.bar-labels span { flex: 1; text-align: center; }
+
+.shop-item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid rgba(143, 169, 194, 0.22);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+.swatch { width: 42px; height: 42px; border-radius: 10px; flex: none; }
+.shop-item .grow { flex: 1; min-width: 0; }
+.shop-item .name { font-weight: 600; }
+.shop-item .sub { font-size: 12px; color: #8fa9c2; }
+.buy {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--coral);
+  color: var(--coral);
+  white-space: nowrap;
+}
+.owned { border-color: rgba(79, 209, 165, 0.6); color: var(--kelp); }
+
+.tabbar {
+  display: flex;
+  border-top: 1px solid rgba(143, 169, 194, 0.22);
+  background: var(--abyss);
+  padding: 9px 0 16px;
+}
+.tabbar span {
+  flex: 1;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5b7488;
+}
+.tabbar span.active { color: var(--coral); }
+
+.note { max-width: 34ch; display: flex; flex-direction: column; gap: 0.6rem; }
+.screen canvas { display: block; width: 100%; height: 100%; }
+
+
+  .lede { font-size: 1.06rem; max-width: 62ch; }
+
+  .verdict {
+    border-left: 3px solid var(--accent);
+    padding-left: 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+
+  .tanks { display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); }
+  .tank {
+    background: linear-gradient(180deg, #0b1e30, #04101a);
+    border: 1px solid var(--rule-strong);
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 0;
+  }
+  .tank canvas { display: block; width: 100%; aspect-ratio: 4 / 3; }
+  .tank figcaption {
+    padding: 0.8rem 1rem 1rem;
+    border-top: 1px solid rgba(147, 174, 196, 0.16);
+    color: #d7e8f4;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+  .tank h3 { color: #f0f8ff; }
+  .tank p { font-size: 0.85rem; color: #8fa9c2; margin: 0; }
+  .tank .meta {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: #5b7488;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding-top: 0.2rem;
+  }
+  .price { color: var(--coral); }
+  .free { color: var(--kelp); }
+
+  .controls { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .controls button {
+    font: inherit;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    padding: 0.3rem 0.8rem;
+    border-radius: 3px;
+    border: 1px solid var(--rule-strong);
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .controls button[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #04101a;
+  }
+
+  .rail { display: flex; gap: 1.5rem; overflow-x: auto; padding-bottom: 0.75rem; }
+  .rail .phone { flex: 0 0 264px; width: 264px; }
+  .rail .screen { height: 545px; font-size: 13px; }
+  .rail .dial { width: 176px; height: 176px; }
+  .rail .time { font-size: 38px; }
+  .rail figure { margin: 0; display: flex; flex-direction: column; gap: 0.6rem; flex: none; }
+  .rail figcaption { width: 264px; }
+
+  .tank-viewport {
+    flex: 1;
+    min-height: 0;
+    margin: 0 -20px;
+    background: linear-gradient(180deg, #0b1e30, #04101a);
+    position: relative;
+  }
+  .merge-bar {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 10px;
+    background: rgba(7, 19, 31, 0.86);
+    border: 1px solid rgba(143, 169, 194, 0.28);
+    border-radius: 12px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .burst {
+    align-self: center;
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: radial-gradient(circle, rgba(255, 209, 102, 0.28), rgba(255, 209, 102, 0) 68%);
+    font-size: 52px;
+  }
+  .xp-track { height: 7px; border-radius: 999px; background: rgba(143, 169, 194, 0.2); overflow: hidden; }
+  .xp-fill { height: 100%; width: 71%; background: linear-gradient(90deg, var(--kelp), var(--sun)); }
+  .mock-banner {
+    border: 1px dashed rgba(255, 209, 102, 0.55);
+    border-radius: 8px;
+    padding: 6px 9px;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
+    color: var(--sun);
+  }
+</style>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:0.7rem">
+    <p class="eyebrow">Pomo Pet · design review · 2 August 2026</p>
+    <h1>M0 is scaffolded, and 3D was put on trial</h1>
+    <p class="lede muted">
+      Two pieces of work. The Expo SDK 54 app now exists, type-checks and bundles. And the
+      question the Forest app raised — should the aquarium be real 3D? — has a working prototype
+      and an answer.
+    </p>
+  </header>
+
+  <div class="verdict">
+    <span class="tag tag-warn">Recommendation · defer 3D to v2</span>
+    <p class="muted">
+      3D is <strong>feasible</strong> — it runs in App Store Expo Go with no dev client, so the
+      free build plan survives. It is deferred because a new fish species costs
+      <strong>hours</strong> as a 2D parameter record and <strong>days</strong> as a modelled,
+      rigged 3D asset — and selling species is the business model. Everything below is the
+      evidence.
+    </p>
+  </div>
+
+  <section>
+    <p class="eyebrow">The spike · three tank shapes, running</p>
+    <h2>Fish behaviour is authored once; each tank supplies a containment function</h2>
+    <p class="muted">
+      Real swim math and real fish geometry from <code>src/features/aquarium3d/</code>, ported to a
+      2D canvas so this page stays 25 KB instead of shipping three.js. What it shows faithfully is
+      the shape language and the motion. What it cannot show is material quality or frame cost.
+    </p>
+
+    <div class="controls" role="group" aria-label="Fish count">
+      <span class="eyebrow" style="margin-right:0.25rem">Fish</span>
+      <button type="button" data-count="6">6</button>
+      <button type="button" data-count="12" aria-pressed="true">12</button>
+      <button type="button" data-count="20">20</button>
+      <button type="button" data-count="40">40</button>
+      <span class="muted" style="font-size:0.85rem">At 20: 1,760 triangles, ~80 draw calls.</span>
+    </div>
+
+    <div class="tanks">
+      <figure class="tank">
+        <canvas data-tank="rectangular" data-count="12" aria-label="Rectangular aquarium with swimming fish"></canvas>
+        <figcaption>
+          <h3>Reef Rectangle</h3>
+          <p>The classic glass box. Widest swimming room, best for a full shoal.</p>
+          <span class="meta"><span>per-axis clamp</span><span class="free">Included</span></span>
+        </figcaption>
+      </figure>
+      <figure class="tank">
+        <canvas data-tank="bowl" data-count="12" aria-label="Round bowl aquarium with swimming fish"></canvas>
+        <figcaption>
+          <h3>Moon Bowl</h3>
+          <p>Fish arc around the curve instead of pacing a wall. This is the shape that argues hardest for 3D.</p>
+          <span class="meta"><span>sphere normalise</span><span class="price">$1.99</span></span>
+        </figcaption>
+      </figure>
+      <figure class="tank">
+        <canvas data-tank="column" data-count="12" aria-label="Tall cylindrical aquarium with swimming fish"></canvas>
+        <figcaption>
+          <h3>Kelp Column</h3>
+          <p>Tall and narrow. Fish spiral vertically, which suits a phone held in portrait.</p>
+          <span class="meta"><span>radial clamp</span><span class="price">$1.99</span></span>
+        </figcaption>
+      </figure>
+    </div>
+
+    <div class="panel">
+      <p class="eyebrow">Why tank shapes are not the deciding factor</p>
+      <p class="muted">
+        Adding a SKU means adding a record plus one containment function — a box clamps per axis, a
+        cylinder clamps the horizontal radius, a bowl normalises onto a sphere. Because containment
+        <em>is</em> the shape equation rather than a per-frame collision test, fish can never clip
+        the glass. The identical pattern works in 2D with a Skia <code>Path</code> and a clip. 3D
+        makes a round bowl a better purchase; it does not make it a possible one.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Measured, on this machine</p>
+    <h2>What the 3D stack actually costs</h2>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Reading</th><th>2D Skia (main)</th><th>With 3D (explore branch)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>iOS Hermes bundle</td><td class="num">3.81 MB</td><td class="num">5.49 MB (+44%)</td></tr>
+          <tr><td>External art assets</td><td class="num">none</td><td class="num">none yet — add 2–6 MB</td></tr>
+          <tr><td>Triangles, 20 fish</td><td class="num">n/a</td><td class="num">1,760</td></tr>
+          <tr><td>Draw calls, 20 fish</td><td class="num">n/a</td><td class="num">~80, uninstanced</td></tr>
+          <tr><td>iOS graphics backend</td><td class="num">Metal</td><td class="num">OpenGL ES (EAGL)</td></tr>
+          <tr><td>Animation thread</td><td class="num">UI (worklets)</td><td class="num">JS (rAF)</td></tr>
+          <tr><td>Runs in App Store Expo Go</td><td class="num">yes</td><td class="num">yes</td></tr>
+          <tr><td><code>expo-doctor</code></td><td class="num">18/18</td><td class="num">18/18</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted" style="font-size:0.9rem">
+      The <code>expo-gl</code> backend finding came from reading the shipped source:
+      <code>ios/EXGLContext.mm</code> creates an <code>EAGLContext</code> and renders into a
+      <code>CAEAGLLayer</code>. That is OpenGL ES, which Apple deprecated in 2018 — not Metal, and
+      not ANGLE-on-Metal. Skia is on Metal. A slow-moving risk, but it points the wrong way.
+    </p>
+    <p class="muted" style="font-size:0.9rem">
+      <strong>Not measured:</strong> frame rate, battery, thermals. Nothing ran on a physical
+      iPhone. Those figures in the full report are reasoned estimates and are labelled as such.
+    </p>
+  </section>
+
+  <section>
+    <p class="eyebrow">The app · five screens from the docs</p>
+    <h2>What M1 through M6a is building toward</h2>
+    <p class="muted">
+      Styled from the real tokens in <code>src/theme/</code>, so these and the app cannot drift.
+      Scroll sideways.
+    </p>
+
+    <div class="rail">
+      <figure>
+        <div class="phone">
+          <div class="screen">
+            <div class="status"><span>9:41</span><span>100%</span></div>
+            <div class="screen-body">
+              <p class="kicker">Focus · session 3 of 4</p>
+              <div class="dial">
+                <div class="dial-inner">
+                  <div class="time">15:32</div>
+                  <p class="kicker" style="margin-top:3px">remaining</p>
+                </div>
+              </div>
+              <div class="dots">
+                <span class="dot on"></span><span class="dot on"></span>
+                <span class="dot on"></span><span class="dot"></span>
+              </div>
+              <button class="pill" type="button">Give up</button>
+              <div class="tile" style="margin-top:auto">
+                <p class="kicker">At stake</p>
+                <div style="display:flex;align-items:center;gap:9px">
+                  <span style="font-size:20px">🐠</span>
+                  <div>
+                    <div style="font-weight:600">Pip · Juvenile</div>
+                    <div style="font-size:11px;color:#8fa9c2">+15 XP if you finish</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="tabbar">
+              <span class="active">Focus</span><span>Aquarium</span><span>Stats</span><span>Shop</span>
+            </div>
+          </div>
+        </div>
+        <figcaption class="muted" style="font-size:0.85rem">
+          <strong style="color:var(--ink)">Focus · M1.</strong> Counts down from an absolute
+          <code>endsAt</code>, never a decrementing counter. The control says "Give up", not
+          "Pause" — naming the consequence is the accountability loop.
+        </figcaption>
+      </figure>
+
+      <figure>
+        <div class="phone">
+          <div class="screen">
+            <div class="status"><span>9:41</span><span>100%</span></div>
+            <div class="screen-body">
+              <p class="kicker">25 minutes · focus</p>
+              <h4>Pip grew.</h4>
+              <div class="burst">🐠</div>
+              <div class="tile">
+                <div style="display:flex;justify-content:space-between;align-items:baseline">
+                  <p class="kicker">Juvenile</p>
+                  <span style="font-family:var(--mono);font-size:11px;color:var(--sun)">+25 XP</span>
+                </div>
+                <div class="xp-track"><div class="xp-fill"></div></div>
+                <div style="font-size:11px;color:#8fa9c2">85 / 120 — merge 3 to reach Elder</div>
+              </div>
+              <div class="tiles">
+                <div class="tile"><p class="kicker">Streak</p><span class="v" style="color:var(--kelp)">6d</span></div>
+                <div class="tile"><p class="kicker">Today</p><span class="v">1h 15m</span></div>
+              </div>
+              <button class="pill" style="margin-top:auto" type="button">Start break</button>
+            </div>
+            <div class="tabbar">
+              <span class="active">Focus</span><span>Aquarium</span><span>Stats</span><span>Shop</span>
+            </div>
+          </div>
+        </div>
+        <figcaption class="muted" style="font-size:0.85rem">
+          <strong style="color:var(--ink)">Session complete · M2→M3.</strong> The bar fills but
+          never crosses a stage. Sessions grow a fish within its stage; merging three is the only
+          way across — stated every time, because the rule is not guessable.
+        </figcaption>
+      </figure>
+
+      <figure>
+        <div class="phone">
+          <div class="screen">
+            <div class="status"><span>9:41</span><span>100%</span></div>
+            <div class="screen-body">
+              <div style="display:flex;justify-content:space-between;align-items:baseline">
+                <h4>Your reef</h4>
+                <span style="font-family:var(--mono);font-size:10px;color:#8fa9c2">7 fish</span>
+              </div>
+              <div class="tank-viewport">
+                <canvas data-tank="rectangular" data-count="7" aria-label="Aquarium with seven fish"></canvas>
+                <div class="merge-bar">
+                  <span style="font-size:17px">✨</span>
+                  <div style="flex:1">
+                    <div style="font-weight:600;font-size:12px">3 Juveniles ready to merge</div>
+                    <div style="font-size:10px;color:#8fa9c2">Creates one Elder</div>
+                  </div>
+                  <span class="buy">Merge</span>
+                </div>
+              </div>
+            </div>
+            <div class="tabbar">
+              <span>Focus</span><span class="active">Aquarium</span><span>Stats</span><span>Shop</span>
+            </div>
+          </div>
+        </div>
+        <figcaption class="muted" style="font-size:0.85rem">
+          <strong style="color:var(--ink)">Aquarium · M2/M3.</strong> Showing the 3D spike for
+          comparison — the MVP ships procedural 2D Skia fish here. Sick fish desaturate and recover;
+          they are never deleted.
+        </figcaption>
+      </figure>
+
+      <figure>
+        <div class="phone">
+          <div class="screen">
+            <div class="status"><span>9:41</span><span>100%</span></div>
+            <div class="screen-body">
+              <h4>Stats</h4>
+              <div class="tiles">
+                <div class="tile"><p class="kicker">Today</p><span class="v">1h 15m</span></div>
+                <div class="tile"><p class="kicker">Streak</p><span class="v" style="color:var(--kelp)">6d</span></div>
+                <div class="tile"><p class="kicker">All-time</p><span class="v">42.5h</span></div>
+                <div class="tile"><p class="kicker">Sessions</p><span class="v">102</span></div>
+              </div>
+              <div class="tile">
+                <p class="kicker">This week</p>
+                <div class="bars" aria-hidden="true">
+                  <div style="height:46%"></div><div style="height:72%"></div>
+                  <div style="height:30%"></div><div style="height:88%"></div>
+                  <div style="height:60%"></div><div style="height:14%"></div>
+                  <div style="height:52%"></div>
+                </div>
+                <div class="bar-labels">
+                  <span>M</span><span>T</span><span>W</span><span>T</span>
+                  <span>F</span><span>S</span><span>S</span>
+                </div>
+              </div>
+              <div class="tile">
+                <p class="kicker">Left early</p>
+                <div style="display:flex;align-items:baseline;gap:7px">
+                  <span class="v" style="color:var(--danger)">7</span>
+                  <span style="font-size:11px;color:#8fa9c2">6.4% of sessions</span>
+                </div>
+              </div>
+            </div>
+            <div class="tabbar">
+              <span>Focus</span><span>Aquarium</span><span class="active">Stats</span><span>Shop</span>
+            </div>
+          </div>
+        </div>
+        <figcaption class="muted" style="font-size:0.85rem">
+          <strong style="color:var(--ink)">Stats · M5.</strong> Streaks use the local calendar date,
+          unit-tested against DST and timezone edges. "Left early" is reported plainly — the penalty
+          already happened in the tank.
+        </figcaption>
+      </figure>
+
+      <figure>
+        <div class="phone">
+          <div class="screen">
+            <div class="status"><span>9:41</span><span>100%</span></div>
+            <div class="screen-body">
+              <h4>Shop</h4>
+              <div class="mock-banner">MOCK PROVIDER — NO REAL CHARGES</div>
+              <p class="kicker">Species</p>
+              <div class="shop-item">
+                <div class="swatch" style="background:linear-gradient(140deg,#FF8A65,#FFD166)"></div>
+                <div class="grow"><div class="name">Clown</div><div class="sub">Starter species</div></div>
+                <span class="buy owned">Owned</span>
+              </div>
+              <div class="shop-item">
+                <div class="swatch" style="background:linear-gradient(140deg,#5B9BD5,#F2A65A)"></div>
+                <div class="grow"><div class="name">Mandarin</div><div class="sub">Slow drifter</div></div>
+                <span class="buy">$2.99</span>
+              </div>
+              <p class="kicker">Tanks</p>
+              <div class="shop-item">
+                <div class="swatch" style="background:#16304A;border:1px solid rgba(159,216,240,0.5)"></div>
+                <div class="grow"><div class="name">Reef Rectangle</div><div class="sub">Widest room</div></div>
+                <span class="buy owned">Owned</span>
+              </div>
+              <div class="shop-item">
+                <div class="swatch" style="background:#16304A;border:1px solid rgba(159,216,240,0.5);border-radius:50%"></div>
+                <div class="grow"><div class="name">Moon Bowl</div><div class="sub">Fish arc around the curve</div></div>
+                <span class="buy">$1.99</span>
+              </div>
+              <button class="pill ghost" style="margin-top:auto" type="button">Restore purchases</button>
+            </div>
+            <div class="tabbar">
+              <span>Focus</span><span>Aquarium</span><span>Stats</span><span class="active">Shop</span>
+            </div>
+          </div>
+        </div>
+        <figcaption class="muted" style="font-size:0.85rem">
+          <strong style="color:var(--ink)">Shop · M6a.</strong> Everything runs through
+          <code>MockEntitlementProvider</code>. The full paywall is demoable with no Apple Developer
+          account — that is the checkpoint for deciding the app is worth the $99.
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Repository state</p>
+    <div class="grid">
+      <div class="panel">
+        <span class="tag tag-good">main</span>
+        <h3>M0 scaffolded</h3>
+        <p class="muted" style="font-size:0.9rem">
+          Expo SDK 54, Expo Router, Reanimated 4 + Skia, Zustand + AsyncStorage with a versioned
+          schema and migration runner from commit one. <code>tsc</code> clean,
+          <code>expo-doctor</code> 18/18, iOS bundle exports.
+        </p>
+        <p class="muted" style="font-size:0.9rem">
+          One item still open: opening it in App Store Expo Go on a real iPhone. That needs your
+          phone, so M0 stays marked in-progress.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tag tag-info">explore/3d-aquarium</span>
+        <h3>Parked, not merged</h3>
+        <p class="muted" style="font-size:0.9rem">
+          Working prototype plus <code>docs/3D_AQUARIUM_REPORT.md</code>. No PR — this is a parallel
+          exploration, not a scope change. The committed 2D Skia direction is unchanged.
+        </p>
+        <p class="muted" style="font-size:0.9rem">
+          To try it: <code>git checkout explore/3d-aquarium &amp;&amp; npm install &amp;&amp; npx expo
+          start</code>, then open the "3D" tab. Ten minutes there turns the estimates into facts.
+        </p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script type="module">
+  /*
+ * A tiny software 3D renderer, so these previews show the actual spike rather than a mockup.
+ *
+ * It re-implements — in ~250 lines against a 2D canvas — the same camera, the same fish
+ * geometry and the same swim math as src/features/aquarium3d/. Inlining three.js would have
+ * cost ~750 KB per page to draw 1,760 triangles; painter's-algorithm rasterising convex cones
+ * costs nothing and is honest about what the scene actually contains.
+ *
+ * Deliberately NOT a claim about performance. This is a picture of the spike's geometry and
+ * motion, running in a browser. The performance numbers live in docs/3D_AQUARIUM_REPORT.md.
+ */
+
+const TAU = Math.PI * 2;
+
+/* ---------- geometry ---------- */
+
+// A cone whose axis runs along +X: apex at +h/2, base ring at -h/2. Matches the prototype's
+// `<coneGeometry>` rotated into fish-forward space.
+function cone(radius, height, segments) {
+  const verts = [[height / 2, 0, 0]];
+  const base = [];
+  for (let i = 0; i < segments; i++) {
+    const t = (i / segments) * TAU;
+    verts.push([-height / 2, Math.cos(t) * radius, Math.sin(t) * radius]);
+    base.push(i + 1);
+  }
+  verts.push([-height / 2, 0, 0]);
+  const centre = verts.length - 1;
+
+  const tris = [];
+  for (let i = 0; i < segments; i++) {
+    const a = base[i];
+    const b = base[(i + 1) % segments];
+    tris.push([0, a, b]);
+    tris.push([centre, b, a]);
+  }
+  return { verts, tris };
+}
+
+function transform(geo, { rotY = 0, rotZ = 0, scale = 1, offset = [0, 0, 0] }) {
+  const cy = Math.cos(rotY), sy = Math.sin(rotY);
+  const cz = Math.cos(rotZ), sz = Math.sin(rotZ);
+  const verts = geo.verts.map(([x, y, z]) => {
+    let X = x * scale, Y = y * scale, Z = z * scale;
+    [X, Y] = [X * cz - Y * sz, X * sz + Y * cz];
+    [X, Z] = [X * cy + Z * sy, -X * sy + Z * cy];
+    return [X + offset[0], Y + offset[1], Z + offset[2]];
+  });
+  return { verts, tris: geo.tris };
+}
+
+/* ---------- swim: a direct port of src/features/aquarium3d/swim.ts ---------- */
+
+const GOLDEN = 0.61803398875;
+
+function swimParams(i) {
+  const t = (i * GOLDEN) % 1;
+  return {
+    speed: 0.22 + t * 0.28,
+    phase: t * TAU,
+    fx: 0.7 + t * 0.5,
+    fy: 0.35 + ((i * 2 * GOLDEN) % 1) * 0.4,
+    fz: 0.55 + ((i * 3 * GOLDEN) % 1) * 0.6,
+    radius: 0.55 + ((i * 5 * GOLDEN) % 1) * 0.4,
+  };
+}
+
+function unitPath(p, time) {
+  const t = time * p.speed + p.phase;
+  return [
+    Math.sin(t * p.fx) * p.radius,
+    Math.sin(t * p.fy + 1.3) * p.radius * 0.7,
+    Math.cos(t * p.fz) * p.radius,
+  ];
+}
+
+// The containment function is the whole tank-shape-as-IAP idea: behaviour is authored once
+// against a unit volume, each SKU supplies only this.
+function contain(tank, [ux, uy, uz]) {
+  const h = tank.half;
+  if (tank.shape === 'box') return [ux * h.x, uy * h.y, uz * h.z];
+  if (tank.shape === 'cylinder') {
+    const k = Math.min(1, 1 / (Math.hypot(ux, uz) || 1));
+    return [ux * k * h.x, uy * h.y, uz * k * h.z];
+  }
+  const k = Math.min(1, 1 / (Math.hypot(ux, uy, uz) || 1));
+  return [ux * k * h.x, uy * k * h.y * 0.85, uz * k * h.z];
+}
+
+function sampleSwim(tank, p, time) {
+  const [x, y, z] = contain(tank, unitPath(p, time));
+  const [nx, , nz] = contain(tank, unitPath(p, time + 0.05));
+  return { x, y, z, yaw: Math.atan2(-(nz - z), nx - x), beat: (time * p.speed * 9 + p.phase) % TAU };
+}
+
+/* ---------- camera ---------- */
+
+const EYE = [0, 0.6, 5.2];
+const PITCH = Math.atan2(0.6, 5.2); // look down at the origin
+
+function toView([x, y, z]) {
+  const dx = x - EYE[0], dy = y - EYE[1], dz = z - EYE[2];
+  const c = Math.cos(PITCH), s = Math.sin(PITCH);
+  return [dx, dy * c - dz * s, dy * s + dz * c];
+}
+
+/* ---------- shading ---------- */
+
+const LIGHT = (() => {
+  const [x, y, z] = [2, 4, 3];
+  const l = Math.hypot(x, y, z);
+  return [x / l, y / l, z / l];
+})();
+
+function shade(hex, a, b, c) {
+  const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
+  const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+  let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+  const l = Math.hypot(nx, ny, nz) || 1;
+  nx /= l; ny /= l; nz /= l;
+  // abs(): faces are not consistently wound and the shapes are convex, so two-sided lighting
+  // is both cheaper and better-looking than trying to cull.
+  const diffuse = Math.abs(nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2]);
+  const fill = Math.max(0, -ny) * 0.18; // cool bounce off the substrate
+  const k = 0.46 + diffuse * 0.62;
+  const r = Math.min(255, hex[0] * k + 70 * fill);
+  const g = Math.min(255, hex[1] * k + 100 * fill);
+  const bl = Math.min(255, hex[2] * k + 140 * fill);
+  return `rgb(${r | 0},${g | 0},${bl | 0})`;
+}
+
+function rgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/* ---------- silhouette (the glass outline) ---------- */
+
+function hull(points) {
+  const pts = points.slice().sort((p, q) => p[0] - q[0] || p[1] - q[1]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const build = (src) => {
+    const out = [];
+    for (const p of src) {
+      while (out.length >= 2 && cross(out[out.length - 2], out[out.length - 1], p) <= 0) out.pop();
+      out.push(p);
+    }
+    out.pop();
+    return out;
+  };
+  return build(pts).concat(build(pts.reverse()));
+}
+
+function silhouettePoints(tank) {
+  const h = tank.half;
+  const pts = [];
+  if (tank.shape === 'box') {
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1])
+      pts.push([sx * h.x, sy * h.y, sz * h.z]);
+  } else if (tank.shape === 'cylinder') {
+    for (let i = 0; i < 40; i++) {
+      const t = (i / 40) * TAU;
+      pts.push([Math.cos(t) * h.x, h.y, Math.sin(t) * h.z]);
+      pts.push([Math.cos(t) * h.x, -h.y, Math.sin(t) * h.z]);
+    }
+  } else {
+    for (let i = 0; i < 24; i++) for (let j = 0; j <= 12; j++) {
+      const u = (i / 24) * TAU, v = 0.5 + (j / 12) * (Math.PI - 0.5);
+      pts.push([
+        Math.sin(v) * Math.cos(u) * h.x,
+        Math.cos(v) * h.y,
+        Math.sin(v) * Math.sin(u) * h.z,
+      ]);
+    }
+  }
+  return pts;
+}
+
+const BOX_EDGES = [
+  [0, 1], [0, 2], [0, 4], [1, 3], [1, 5], [2, 3],
+  [2, 6], [3, 7], [4, 5], [4, 6], [5, 7], [6, 7],
+];
+
+/* ---------- scene ---------- */
+
+const PALETTE = [
+  ['#FF8A65', '#FFD166'], ['#4FD1A5', '#2E8B74'], ['#5B9BD5', '#F2A65A'],
+  ['#FFD166', '#E5A50A'], ['#C08BE0', '#7E5AA2'],
+];
+
+export function createTankScene(canvas, tank, options = {}) {
+  const ctx = canvas.getContext('2d');
+  const state = { fishCount: options.fishCount ?? 12, running: true, tank };
+
+  // Static per-fish geometry, built once. The tail is kept separate so it can be hinged.
+  const BODY = cone(0.09, 0.32, 7);
+  // Spans x = -0.30 (tip) to x = -0.16, so its base sits exactly on the body's tail hinge.
+  const TAIL = transform(cone(0.09, 0.14, 4), { rotY: Math.PI, offset: [-0.23, 0, 0] });
+  const HINGE_X = -0.16;
+  const DORSAL = transform(cone(0.05, 0.09, 3), { rotZ: Math.PI / 2, offset: [-0.02, 0.085, 0] });
+
+  let sil = null, corners = null, rim = null, w = 0, h = 0, cx = 0, cy = 0, scale = 1;
+  // A uniform 2D fit applied after projection, so each tank is framed to its card without
+  // changing the camera. Perspective is untouched — this only zooms and centres the result.
+  let fit = { s: 1, dx: 0, dy: 0 };
+
+  function resize() {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const r = canvas.getBoundingClientRect();
+    w = Math.max(1, Math.round(r.width));
+    h = Math.max(1, Math.round(r.height));
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cx = w / 2;
+    cy = h / 2;
+    scale = (h / 2) / Math.tan((42 * Math.PI) / 360);
+    sil = null;
+  }
+
+  function projectRaw(p) {
+    const v = toView(p);
+    const d = -v[2];
+    if (d <= 0.05) return null;
+    return [cx + (v[0] * scale) / d, cy - (v[1] * scale) / d, v[2]];
+  }
+
+  function project(p) {
+    const r = projectRaw(p);
+    if (!r) return null;
+    return [(r[0] - cx) * fit.s + cx + fit.dx, (r[1] - cy) * fit.s + cy + fit.dy, r[2]];
+  }
+
+  function ensureStatic() {
+    if (sil) return;
+
+    const raw = silhouettePoints(state.tank).map(projectRaw).filter(Boolean);
+    const xs = raw.map((p) => p[0]);
+    const ys = raw.map((p) => p[1]);
+    const bw = Math.max(...xs) - Math.min(...xs);
+    const bh = Math.max(...ys) - Math.min(...ys);
+    const pad = Math.min(w, h) * 0.09;
+    const mx = (Math.min(...xs) + Math.max(...xs)) / 2;
+    const my = (Math.min(...ys) + Math.max(...ys)) / 2;
+    fit.s = Math.min((w - pad * 2) / bw, (h - pad * 2) / bh);
+    fit.dx = -(mx - cx) * fit.s;
+    fit.dy = -(my - cy) * fit.s;
+
+    sil = hull(silhouettePoints(state.tank).map(project).filter(Boolean).map((p) => [p[0], p[1]]));
+
+    const hh = state.tank.half;
+    corners = null;
+    rim = null;
+
+    if (state.tank.shape === 'box') {
+      corners = [];
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1])
+        corners.push(project([sx * hh.x, sy * hh.y, sz * hh.z]));
+    } else {
+      // The open top. Without it a bowl silhouettes as a solid ball and a column as a capsule.
+      // The bowl's rim follows the sphere's thetaStart of 0.5 rad, matching Tank.tsx.
+      const ry = state.tank.shape === 'bowl' ? Math.cos(0.5) * hh.y : hh.y;
+      const rr = state.tank.shape === 'bowl' ? Math.sin(0.5) : 1;
+      rim = [];
+      for (let i = 0; i <= 40; i++) {
+        const t = (i / 40) * TAU;
+        const p = project([Math.cos(t) * hh.x * rr, ry, Math.sin(t) * hh.z * rr]);
+        if (p) rim.push(p);
+      }
+    }
+  }
+
+  function tracePath(points) {
+    ctx.beginPath();
+    ctx.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i][0], points[i][1]);
+    ctx.closePath();
+  }
+
+  function drawWater() {
+    tracePath(sil);
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, 'rgba(79,155,213,0.20)');
+    g.addColorStop(1, 'rgba(8,32,52,0.42)');
+    ctx.fillStyle = g;
+    ctx.fill();
+  }
+
+  function drawGlass() {
+    if (corners) {
+      ctx.strokeStyle = 'rgba(159,216,240,0.22)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (const [a, b] of BOX_EDGES) {
+        if (!corners[a] || !corners[b]) continue;
+        ctx.moveTo(corners[a][0], corners[a][1]);
+        ctx.lineTo(corners[b][0], corners[b][1]);
+      }
+      ctx.stroke();
+    }
+    if (rim) {
+      ctx.beginPath();
+      ctx.moveTo(rim[0][0], rim[0][1]);
+      for (let i = 1; i < rim.length; i++) ctx.lineTo(rim[i][0], rim[i][1]);
+      ctx.strokeStyle = 'rgba(180,230,250,0.42)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    tracePath(sil);
+    ctx.strokeStyle = 'rgba(180,230,250,0.55)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  // Everything drawn between the water and the glass goes through one depth-sorted list, so
+  // fish correctly pass in front of and behind the coral.
+  function collect(time) {
+    const tris = [];
+
+    const push = (geo, colour, xform) => {
+      const verts = geo.verts.map(xform);
+      const base = rgb(colour);
+      for (const [i, j, k] of geo.tris) {
+        const a = verts[i], b = verts[j], c = verts[k];
+        const pa = project(a), pb = project(b), pc = project(c);
+        if (!pa || !pb || !pc) continue;
+        tris.push({ z: (pa[2] + pb[2] + pc[2]) / 3, pa, pb, pc, fill: shade(base, a, b, c) });
+      }
+    };
+
+    const hh = state.tank.half;
+    // Curved tanks have no flat floor at -half.y, so decor has to sit higher and closer in or
+    // it pokes out through the glass.
+    const curved = state.tank.shape !== 'box';
+    const floor = curved ? -hh.y * 0.66 : -hh.y + 0.02;
+    const spread = hh.x * (curved ? 0.42 : 0.6);
+
+    // rocks — squat cones stood on end, which at this scale reads as rubble
+    for (const i of [-1, 0, 1]) {
+      const r = 0.11 + Math.abs(i) * 0.04;
+      const g = transform(cone(r, r * 1.6, 6), { rotZ: Math.PI / 2 });
+      push(g, '#2A4A5E', ([x, y, z]) => [
+        i * spread * 0.7 + x,
+        floor + r * 0.8 + y,
+        -hh.z * 0.3 + z,
+      ]);
+    }
+
+    // branching coral
+    for (let i = 0; i < 3; i++) {
+      const g = transform(cone(0.045, 0.24 + i * 0.08, 5), { rotZ: Math.PI / 2 + (i - 1) * 0.25 });
+      push(g, '#E0715C', ([x, y, z]) => [
+        -spread + i * 0.07 - 0.07 + x,
+        floor + 0.16 + i * 0.06 + y,
+        hh.z * 0.25 + z,
+      ]);
+    }
+
+    for (let i = 0; i < state.fishCount; i++) {
+      const [colour, accent] = PALETTE[i % PALETTE.length];
+      const s = sampleSwim(state.tank, swimParams(i), time);
+      const size = 0.8 + ((i * 7) % 5) * 0.12;
+      const roll = Math.sin(s.beat) * 0.08;
+      const cyw = Math.cos(s.yaw), syw = Math.sin(s.yaw);
+      const cr = Math.cos(roll), sr = Math.sin(roll);
+
+      const place = ([x, y, z]) => {
+        let X = x * size, Y = y * size, Z = z * size;
+        [X, Y] = [X * cr - Y * sr, X * sr + Y * cr];
+        [X, Z] = [X * cyw + Z * syw, -X * syw + Z * cyw];
+        return [X + s.x, Y + s.y, Z + s.z];
+      };
+
+      push(BODY, colour, place);
+      push(DORSAL, accent, place);
+
+      // Tail hinges at the back of the body, so the wag reads as a beat rather than a slide.
+      const wag = Math.sin(s.beat) * 0.5;
+      const cw = Math.cos(wag), sw = Math.sin(wag);
+      push(TAIL, accent, ([x, y, z]) => {
+        const lx = x - HINGE_X;
+        return place([lx * cw + z * sw + HINGE_X, y, -lx * sw + z * cw]);
+      });
+    }
+
+    tris.sort((a, b) => a.z - b.z);
+    return tris;
+  }
+
+  function frame(time) {
+    ensureStatic();
+    ctx.clearRect(0, 0, w, h);
+    drawWater();
+
+    for (const t of collect(time)) {
+      ctx.beginPath();
+      ctx.moveTo(t.pa[0], t.pa[1]);
+      ctx.lineTo(t.pb[0], t.pb[1]);
+      ctx.lineTo(t.pc[0], t.pc[1]);
+      ctx.closePath();
+      ctx.fillStyle = t.fill;
+      ctx.fill();
+    }
+
+    drawGlass();
+  }
+
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let raf = 0;
+  const start = performance.now();
+
+  function loop(now) {
+    if (!state.running) return;
+    frame((now - start) / 1000);
+    raf = requestAnimationFrame(loop);
+  }
+
+  const ro = new ResizeObserver(() => { resize(); if (!state.running) frame(2.4); });
+  ro.observe(canvas);
+  resize();
+
+  if (reduced.matches) {
+    state.running = false;
+    frame(2.4); // a representative still, rather than nothing
+  } else {
+    raf = requestAnimationFrame(loop);
+  }
+
+  return {
+    setFishCount(n) { state.fishCount = n; if (!state.running) frame(2.4); },
+    setTank(t) { state.tank = t; sil = null; if (!state.running) frame(2.4); },
+    destroy() { state.running = false; cancelAnimationFrame(raf); ro.disconnect(); },
+  };
+}
+
+export const TANKS = {
+  rectangular: { id: 'rectangular', shape: 'box', half: { x: 2.2, y: 1.3, z: 1.2 } },
+  bowl: { id: 'bowl', shape: 'bowl', half: { x: 1.5, y: 1.5, z: 1.5 } },
+  column: { id: 'column', shape: 'cylinder', half: { x: 1.0, y: 1.9, z: 1.0 } },
+};
+
+
+  const scenes = [...document.querySelectorAll('canvas[data-tank]')].map((c) =>
+    createTankScene(c, TANKS[c.dataset.tank], { fishCount: Number(c.dataset.count) || 12 }),
+  );
+
+  // The fish-count control only drives the three shape-comparison tanks; the aquarium screen
+  // mock stays at seven, because that is the number its copy claims.
+  const adjustable = scenes.slice(0, 3);
+  const buttons = [...document.querySelectorAll('.controls button')];
+  for (const button of buttons) {
+    button.addEventListener('click', () => {
+      for (const other of buttons) other.setAttribute('aria-pressed', String(other === button));
+      const n = Number(button.dataset.count);
+      for (const scene of adjustable) scene.setFishCount(n);
+    });
+  }
+</script>

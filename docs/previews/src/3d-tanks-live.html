@@ -1,0 +1,164 @@
+<!-- @dsCard group="3D Exploration" -->
+<title>3D Tanks — Live Spike</title>
+<style>
+  <!-- @include tokens.css -->
+
+  .tanks { display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .tank {
+    background: linear-gradient(180deg, #0b1e30, #04101a);
+    border: 1px solid var(--rule-strong);
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .tank canvas { display: block; width: 100%; aspect-ratio: 4 / 3; }
+  .tank-meta {
+    padding: 0.85rem 1rem 1rem;
+    border-top: 1px solid rgba(147, 174, 196, 0.16);
+    background: rgba(4, 16, 26, 0.6);
+    color: #d7e8f4;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .tank-meta h3 { color: #f0f8ff; }
+  .tank-meta dl {
+    margin: 0.25rem 0 0;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.15rem 0.75rem;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: #8fa9c2;
+  }
+  .tank-meta dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+  .price { color: var(--coral); }
+  .free { color: var(--kelp); }
+
+  .controls { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .controls button {
+    font: inherit;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    padding: 0.3rem 0.8rem;
+    border-radius: 3px;
+    border: 1px solid var(--rule-strong);
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .controls button[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #04101a;
+  }
+</style>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:0.6rem">
+    <p class="eyebrow">Spike · branch explore/3d-aquarium</p>
+    <h1>Three tank shapes, one containment function</h1>
+    <p class="muted">
+      These are running the spike's real swim math and real fish geometry — the port lives in
+      <code>docs/previews/src/tank-renderer.js</code>, drawn to a 2D canvas so the page stays a
+      few kilobytes instead of shipping three.js. On device the same scene runs through
+      <code>expo-gl</code> with proper lighting and depth. What this shows faithfully is the
+      <strong>shape language and the motion</strong>; what it does not show is material quality
+      or frame cost.
+    </p>
+  </header>
+
+  <section>
+    <p class="eyebrow">Fish count</p>
+    <div class="controls" role="group" aria-label="Fish count">
+      <button type="button" data-count="6">6</button>
+      <button type="button" data-count="12" aria-pressed="true">12</button>
+      <button type="button" data-count="20">20</button>
+      <button type="button" data-count="40">40</button>
+      <span class="muted" style="font-size:0.85rem">
+        The report's numbers are quoted at 20 — 1,760 triangles, ~80 draw calls.
+      </span>
+    </div>
+
+    <div class="tanks">
+      <figure class="tank" style="margin:0">
+        <canvas data-tank="rectangular" aria-label="Rectangular aquarium with swimming fish"></canvas>
+        <figcaption class="tank-meta">
+          <h3>Reef Rectangle</h3>
+          <p style="font-size:0.85rem;color:#8fa9c2;margin:0">
+            The classic glass box. Widest swimming room, best for showing off a full shoal.
+          </p>
+          <dl>
+            <dt>Containment</dt><dd>per-axis clamp</dd>
+            <dt>Glass triangles</dt><dd>12</dd>
+            <dt>Price</dt><dd class="free">Included</dd>
+          </dl>
+        </figcaption>
+      </figure>
+
+      <figure class="tank" style="margin:0">
+        <canvas data-tank="bowl" aria-label="Round bowl aquarium with swimming fish"></canvas>
+        <figcaption class="tank-meta">
+          <h3>Moon Bowl</h3>
+          <p style="font-size:0.85rem;color:#8fa9c2;margin:0">
+            Fish arc around the curve instead of pacing a wall. This is the shape that argues
+            hardest for 3D — in 2D a bowl is an outline, here it is a volume.
+          </p>
+          <dl>
+            <dt>Containment</dt><dd>sphere normalise</dd>
+            <dt>Glass triangles</dt><dd>1,504</dd>
+            <dt>Price</dt><dd class="price">$1.99</dd>
+          </dl>
+        </figcaption>
+      </figure>
+
+      <figure class="tank" style="margin:0">
+        <canvas data-tank="column" aria-label="Tall cylindrical aquarium with swimming fish"></canvas>
+        <figcaption class="tank-meta">
+          <h3>Kelp Column</h3>
+          <p style="font-size:0.85rem;color:#8fa9c2;margin:0">
+            Tall and narrow. Fish spiral vertically, which reads well on a phone held in portrait.
+          </p>
+          <dl>
+            <dt>Containment</dt><dd>radial clamp</dd>
+            <dt>Glass triangles</dt><dd>56</dd>
+            <dt>Price</dt><dd class="price">$1.99</dd>
+          </dl>
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="panel">
+    <p class="eyebrow">Why this matters for the IAP</p>
+    <p class="muted">
+      Adding a tank SKU is adding a record to <code>src/features/aquarium3d/tanks.ts</code> plus one
+      containment function — a box clamps per axis, a cylinder clamps the horizontal radius, a bowl
+      normalises onto a sphere. Swim behaviour is authored once against a unit volume and never
+      changes. Because containment <em>is</em> the shape equation rather than a per-frame collision
+      test, fish cannot clip through the glass no matter what shape you sell next.
+    </p>
+    <p class="muted">
+      The same pattern works in 2D Skia with a <code>Path</code> and a clip. So tank shapes are not
+      a reason to adopt 3D — they are only <em>nicer</em> in 3D.
+    </p>
+  </section>
+</div>
+
+<script type="module">
+  <!-- @include tank-renderer.js -->
+
+  const scenes = [...document.querySelectorAll('canvas[data-tank]')].map((c) =>
+    createTankScene(c, TANKS[c.dataset.tank], { fishCount: 12 }),
+  );
+
+  const buttons = [...document.querySelectorAll('.controls button')];
+  for (const button of buttons) {
+    button.addEventListener('click', () => {
+      for (const other of buttons) other.setAttribute('aria-pressed', String(other === button));
+      const n = Number(button.dataset.count);
+      for (const scene of scenes) scene.setFishCount(n);
+    });
+  }
+</script>

@@ -1,0 +1,88 @@
+<!-- @dsCard group="Screens" -->
+<title>Stats Screen</title>
+<style>
+  <!-- @include tokens.css -->
+  <!-- @include phone.css -->
+</style>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:0.5rem">
+    <p class="eyebrow">Screen 4 of 5 · milestone M5</p>
+    <h1>Stats</h1>
+  </header>
+
+  <div class="phone-row">
+    <div class="phone">
+      <div class="screen">
+        <div class="status"><span>9:41</span><span>100%</span></div>
+        <div class="screen-body">
+          <h4>Stats</h4>
+
+          <div class="tiles">
+            <div class="tile">
+              <p class="kicker">Today</p>
+              <span class="v">1h 15m</span>
+            </div>
+            <div class="tile">
+              <p class="kicker">Current streak</p>
+              <span class="v" style="color:var(--kelp)">6d</span>
+            </div>
+            <div class="tile">
+              <p class="kicker">All-time</p>
+              <span class="v">42.5h</span>
+            </div>
+            <div class="tile">
+              <p class="kicker">Sessions</p>
+              <span class="v">102</span>
+            </div>
+          </div>
+
+          <div class="tile">
+            <p class="kicker">This week</p>
+            <div class="bars" aria-hidden="true">
+              <div style="height:46%"></div>
+              <div style="height:72%"></div>
+              <div style="height:30%"></div>
+              <div style="height:88%"></div>
+              <div style="height:60%"></div>
+              <div style="height:14%"></div>
+              <div style="height:52%"></div>
+            </div>
+            <div class="bar-labels">
+              <span>M</span><span>T</span><span>W</span><span>T</span>
+              <span>F</span><span>S</span><span>S</span>
+            </div>
+          </div>
+
+          <div class="tile">
+            <p class="kicker">Left early</p>
+            <div style="display:flex;align-items:baseline;gap:8px">
+              <span class="v" style="color:var(--danger)">7</span>
+              <span style="font-size:12px;color:#8fa9c2">6.4% of sessions</span>
+            </div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <span>Focus</span><span>Aquarium</span><span class="active">Stats</span><span>Shop</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <p class="eyebrow">Notes</p>
+      <p class="muted">
+        Streaks are computed from the <em>local</em> calendar date, and the DST and timezone edge
+        cases are unit-tested — a streak that silently breaks when the user flies somewhere is the
+        fastest way to lose them.
+      </p>
+      <p class="muted">
+        "Left early" is reported as a plain count and rate. It is information, not a scold; the
+        penalty already happened in the tank.
+      </p>
+      <p class="muted">
+        All figures come from the persisted <code>stats</code> slice, including
+        <code>focusMsByDate</code>, which is what the weekly bars read.
+      </p>
+    </div>
+  </div>
+</div>

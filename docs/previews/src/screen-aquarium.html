@@ -1,0 +1,87 @@
+<!-- @dsCard group="Screens" -->
+<title>Aquarium Screen</title>
+<style>
+  <!-- @include tokens.css -->
+  <!-- @include phone.css -->
+
+  .tank-viewport {
+    flex: 1;
+    min-height: 0;
+    margin: 0 -20px;
+    background: linear-gradient(180deg, #0b1e30, #04101a);
+    position: relative;
+  }
+  .merge-bar {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: 12px;
+    background: rgba(7, 19, 31, 0.86);
+    border: 1px solid rgba(143, 169, 194, 0.28);
+    border-radius: 14px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+</style>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:0.5rem">
+    <p class="eyebrow">Screen 3 of 5 · milestone M2 / M3</p>
+    <h1>Aquarium</h1>
+  </header>
+
+  <div class="phone-row">
+    <div class="phone">
+      <div class="screen">
+        <div class="status"><span>9:41</span><span>100%</span></div>
+        <div class="screen-body">
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <h4>Your reef</h4>
+            <span style="font-family:var(--mono);font-size:11px;color:#8fa9c2">7 fish</span>
+          </div>
+
+          <div class="tank-viewport">
+            <canvas data-tank="rectangular" aria-label="Aquarium with the user's fish"></canvas>
+            <div class="merge-bar">
+              <span style="font-size:20px">✨</span>
+              <div style="flex:1">
+                <div style="font-weight:600;font-size:13px">3 Juveniles ready to merge</div>
+                <div style="font-size:11px;color:#8fa9c2">Creates one Elder</div>
+              </div>
+              <span class="buy">Merge</span>
+            </div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <span>Focus</span><span class="active">Aquarium</span><span>Stats</span><span>Shop</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <p class="eyebrow">Notes</p>
+      <p class="muted">
+        <strong>The tank in this mock is the 3D spike, not the committed design.</strong> It is
+        here so the two options can be compared side by side. The MVP ships this screen with
+        procedurally drawn 2D Skia fish — body, tail and fin parameters plus an idle swim loop —
+        per <code>docs/PLAN.md</code> M2.
+      </p>
+      <p class="muted">
+        A sick fish desaturates toward <code>#6B7A85</code> and recovers on the next completed
+        session. Fish are never deleted, only marked.
+      </p>
+      <p class="muted">
+        The merge prompt only appears when three same-stage fish exist, so the mechanic teaches
+        itself instead of needing a tutorial.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  <!-- @include tank-renderer.js -->
+  const c = document.querySelector('canvas[data-tank]');
+  createTankScene(c, TANKS.rectangular, { fishCount: 7 });
+</script>

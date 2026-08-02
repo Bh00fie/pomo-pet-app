@@ -1,0 +1,473 @@
+<!-- @dsCard group="Screens" -->
+<title>Session Complete Screen</title>
+<style>
+  /*
+ * Tokens are lifted verbatim from src/theme/ so these previews and the app cannot drift apart.
+ * The light theme is derived here (the app itself is dark-only for now).
+ */
+:root {
+  color-scheme: light dark;
+
+  /* app palette — src/theme/colors.ts */
+  --abyss: #04101a;
+  --deep: #07131f;
+  --surface: #0e2033;
+  --surface-raised: #16304a;
+  --coral: #ff8a65;
+  --coral-deep: #e5613c;
+  --kelp: #4fd1a5;
+  --sun: #ffd166;
+  --danger: #ff5c7a;
+  --sick: #6b7a85;
+
+  /* page chrome — light */
+  --page: #eef4f7;
+  --panel: #ffffff;
+  --panel-2: #f6fafc;
+  --ink: #08161f;
+  --ink-muted: #4a6478;
+  --ink-faint: #7d95a6;
+  --rule: rgba(10, 45, 65, 0.14);
+  --rule-strong: rgba(10, 45, 65, 0.26);
+  --accent: var(--coral-deep);
+  --good: #12805f;
+  --warn: #a86a12;
+
+  --measure: 66ch;
+  --step: clamp(0.75rem, 0.4rem + 1.1vw, 1.15rem);
+
+  --display: "Iowan Old Style", "Palatino Linotype", Palatino, "Hoefler Text", Georgia, serif;
+  --body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #061019;
+    --panel: #0c1c2b;
+    --panel-2: #0a1723;
+    --ink: #e6f1f8;
+    --ink-muted: #93aec4;
+    --ink-faint: #64809a;
+    --rule: rgba(147, 174, 196, 0.2);
+    --rule-strong: rgba(147, 174, 196, 0.36);
+    --accent: var(--coral);
+    --good: #4fd1a5;
+    --warn: #ffd166;
+  }
+}
+
+/* The viewer's own toggle must win over the OS preference, in both directions. */
+:root[data-theme="dark"] {
+  --page: #061019;
+  --panel: #0c1c2b;
+  --panel-2: #0a1723;
+  --ink: #e6f1f8;
+  --ink-muted: #93aec4;
+  --ink-faint: #64809a;
+  --rule: rgba(147, 174, 196, 0.2);
+  --rule-strong: rgba(147, 174, 196, 0.36);
+  --accent: var(--coral);
+  --good: #4fd1a5;
+  --warn: #ffd166;
+}
+
+:root[data-theme="light"] {
+  --page: #eef4f7;
+  --panel: #ffffff;
+  --panel-2: #f6fafc;
+  --ink: #08161f;
+  --ink-muted: #4a6478;
+  --ink-faint: #7d95a6;
+  --rule: rgba(10, 45, 65, 0.14);
+  --rule-strong: rgba(10, 45, 65, 0.26);
+  --accent: var(--coral-deep);
+  --good: #12805f;
+  --warn: #a86a12;
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: clamp(1.25rem, 4vw, 3rem) clamp(1rem, 4vw, 2.5rem) 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+/* A worksheet eyebrow: the reading, then what was read. */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  font-weight: 600;
+  text-wrap: balance;
+  margin: 0;
+  line-height: 1.15;
+}
+h1 { font-size: clamp(1.8rem, 1.1rem + 2.6vw, 2.9rem); letter-spacing: -0.015em; }
+h2 { font-size: clamp(1.25rem, 0.95rem + 1.1vw, 1.6rem); }
+h3 { font-size: 1.05rem; }
+
+p { margin: 0; max-width: var(--measure); }
+.muted { color: var(--ink-muted); }
+strong { font-weight: 650; }
+
+section { display: flex; flex-direction: column; gap: 1rem; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 1.15rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  width: fit-content;
+}
+.tag-good { color: var(--good); }
+.tag-warn { color: var(--warn); }
+.tag-info { color: var(--ink-faint); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+th,
+td { text-align: left; padding: 0.5rem 0.75rem 0.5rem 0; border-bottom: 1px solid var(--rule); }
+th {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-weight: 500;
+}
+td.num { text-align: right; padding-right: 0; font-family: var(--mono); }
+.scroll { overflow-x: auto; }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  background: var(--panel-2);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.05em 0.35em;
+}
+
+:where(a, button, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+  /*
+ * Device frame + in-app styling for the screen previews.
+ * The app is dark-only, so the phone interior stays dark in both page themes — only the page
+ * chrome around it follows the viewer's preference.
+ */
+.phone-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  align-items: flex-start;
+}
+
+.phone {
+  width: 300px;
+  flex: 0 0 300px;
+  border-radius: 34px;
+  padding: 8px;
+  background: linear-gradient(160deg, #22323f, #0b141b);
+  box-shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.75);
+}
+
+.screen {
+  border-radius: 27px;
+  overflow: hidden;
+  background: var(--deep);
+  color: #eaf4ff;
+  height: 620px;
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.status {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 20px 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #8fa9c2;
+  font-variant-numeric: tabular-nums;
+}
+
+.screen-body {
+  flex: 1;
+  padding: 16px 20px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+}
+
+.screen h4 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 21px;
+  font-weight: 600;
+  color: #eaf4ff;
+}
+
+.kicker {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #8fa9c2;
+  margin: 0;
+}
+
+.dial {
+  align-self: center;
+  width: 208px;
+  height: 208px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background:
+    conic-gradient(var(--coral) 0 62%, rgba(143, 169, 194, 0.18) 62% 100%);
+  position: relative;
+}
+.dial::after {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  border-radius: 50%;
+  background: var(--deep);
+}
+.dial-inner { position: relative; text-align: center; }
+.time {
+  font-family: var(--mono);
+  font-size: 44px;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.pill {
+  border: none;
+  border-radius: 999px;
+  padding: 12px 26px;
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: var(--coral);
+  color: #04101a;
+  align-self: center;
+}
+.pill.ghost { background: transparent; color: #eaf4ff; border: 1px solid rgba(143, 169, 194, 0.32); }
+
+.dots { display: flex; gap: 7px; justify-content: center; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(143, 169, 194, 0.3); }
+.dot.on { background: var(--kelp); }
+
+.tile {
+  background: var(--surface);
+  border: 1px solid rgba(143, 169, 194, 0.22);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tile .v { font-family: var(--mono); font-size: 22px; font-variant-numeric: tabular-nums; }
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.bars { display: flex; align-items: flex-end; gap: 8px; height: 92px; }
+.bars div {
+  flex: 1;
+  background: linear-gradient(180deg, var(--kelp), rgba(79, 209, 165, 0.25));
+  border-radius: 4px 4px 2px 2px;
+}
+.bar-labels {
+  display: flex;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: #5b7488;
+}
+.bar-labels span { flex: 1; text-align: center; }
+
+.shop-item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid rgba(143, 169, 194, 0.22);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+.swatch { width: 42px; height: 42px; border-radius: 10px; flex: none; }
+.shop-item .grow { flex: 1; min-width: 0; }
+.shop-item .name { font-weight: 600; }
+.shop-item .sub { font-size: 12px; color: #8fa9c2; }
+.buy {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--coral);
+  color: var(--coral);
+  white-space: nowrap;
+}
+.owned { border-color: rgba(79, 209, 165, 0.6); color: var(--kelp); }
+
+.tabbar {
+  display: flex;
+  border-top: 1px solid rgba(143, 169, 194, 0.22);
+  background: var(--abyss);
+  padding: 9px 0 16px;
+}
+.tabbar span {
+  flex: 1;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5b7488;
+}
+.tabbar span.active { color: var(--coral); }
+
+.note { max-width: 34ch; display: flex; flex-direction: column; gap: 0.6rem; }
+.screen canvas { display: block; width: 100%; height: 100%; }
+
+
+  .xp-track {
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(143, 169, 194, 0.2);
+    overflow: hidden;
+  }
+  .xp-fill { height: 100%; width: 71%; background: linear-gradient(90deg, var(--kelp), var(--sun)); }
+  .burst {
+    align-self: center;
+    width: 190px;
+    height: 190px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: radial-gradient(circle, rgba(255, 209, 102, 0.28), rgba(255, 209, 102, 0) 68%);
+    font-size: 62px;
+  }
+</style>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:0.5rem">
+    <p class="eyebrow">Screen 2 of 5 · milestone M2 → M3</p>
+    <h1>Session complete</h1>
+  </header>
+
+  <div class="phone-row">
+    <div class="phone">
+      <div class="screen">
+        <div class="status"><span>9:41</span><span>100%</span></div>
+        <div class="screen-body">
+          <p class="kicker">25 minutes · focus</p>
+          <h4>Pip grew.</h4>
+
+          <div class="burst">🐠</div>
+
+          <div class="tile">
+            <div style="display:flex;justify-content:space-between;align-items:baseline">
+              <p class="kicker">Juvenile</p>
+              <span style="font-family:var(--mono);font-size:12px;color:var(--sun)">+25 XP</span>
+            </div>
+            <div class="xp-track"><div class="xp-fill"></div></div>
+            <div style="font-size:12px;color:#8fa9c2">
+              85 / 120 — merge 3 Juveniles to reach Elder
+            </div>
+          </div>
+
+          <div class="tiles">
+            <div class="tile">
+              <p class="kicker">Streak</p>
+              <span class="v" style="color:var(--kelp)">6d</span>
+            </div>
+            <div class="tile">
+              <p class="kicker">Today</p>
+              <span class="v">1h 15m</span>
+            </div>
+          </div>
+
+          <button class="pill" style="margin-top:auto" type="button">Start break</button>
+          <button class="pill ghost" type="button">See aquarium</button>
+        </div>
+        <div class="tabbar">
+          <span class="active">Focus</span><span>Aquarium</span><span>Stats</span><span>Shop</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <p class="eyebrow">Notes</p>
+      <p class="muted">
+        The XP bar fills but never crosses a stage on its own. Sessions grow a fish
+        <em>within</em> its stage; merging three same-stage fish is the only way across a
+        boundary. The caption says so on every completion, because the rule is not guessable.
+      </p>
+      <p class="muted">
+        The burst, ripple and glow come from the shared animation primitives built first in M2, so
+        the merge sequence in M3 reuses them rather than reinventing the timing.
+      </p>
+    </div>
+  </div>
+</div>

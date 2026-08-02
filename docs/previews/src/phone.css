@@ -1,0 +1,185 @@
+/*
+ * Device frame + in-app styling for the screen previews.
+ * The app is dark-only, so the phone interior stays dark in both page themes — only the page
+ * chrome around it follows the viewer's preference.
+ */
+.phone-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  align-items: flex-start;
+}
+
+.phone {
+  width: 300px;
+  flex: 0 0 300px;
+  border-radius: 34px;
+  padding: 8px;
+  background: linear-gradient(160deg, #22323f, #0b141b);
+  box-shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.75);
+}
+
+.screen {
+  border-radius: 27px;
+  overflow: hidden;
+  background: var(--deep);
+  color: #eaf4ff;
+  height: 620px;
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.status {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 20px 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #8fa9c2;
+  font-variant-numeric: tabular-nums;
+}
+
+.screen-body {
+  flex: 1;
+  padding: 16px 20px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+}
+
+.screen h4 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 21px;
+  font-weight: 600;
+  color: #eaf4ff;
+}
+
+.kicker {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #8fa9c2;
+  margin: 0;
+}
+
+.dial {
+  align-self: center;
+  width: 208px;
+  height: 208px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background:
+    conic-gradient(var(--coral) 0 62%, rgba(143, 169, 194, 0.18) 62% 100%);
+  position: relative;
+}
+.dial::after {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  border-radius: 50%;
+  background: var(--deep);
+}
+.dial-inner { position: relative; text-align: center; }
+.time {
+  font-family: var(--mono);
+  font-size: 44px;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.pill {
+  border: none;
+  border-radius: 999px;
+  padding: 12px 26px;
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: var(--coral);
+  color: #04101a;
+  align-self: center;
+}
+.pill.ghost { background: transparent; color: #eaf4ff; border: 1px solid rgba(143, 169, 194, 0.32); }
+
+.dots { display: flex; gap: 7px; justify-content: center; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(143, 169, 194, 0.3); }
+.dot.on { background: var(--kelp); }
+
+.tile {
+  background: var(--surface);
+  border: 1px solid rgba(143, 169, 194, 0.22);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tile .v { font-family: var(--mono); font-size: 22px; font-variant-numeric: tabular-nums; }
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.bars { display: flex; align-items: flex-end; gap: 8px; height: 92px; }
+.bars div {
+  flex: 1;
+  background: linear-gradient(180deg, var(--kelp), rgba(79, 209, 165, 0.25));
+  border-radius: 4px 4px 2px 2px;
+}
+.bar-labels {
+  display: flex;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: #5b7488;
+}
+.bar-labels span { flex: 1; text-align: center; }
+
+.shop-item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid rgba(143, 169, 194, 0.22);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+.swatch { width: 42px; height: 42px; border-radius: 10px; flex: none; }
+.shop-item .grow { flex: 1; min-width: 0; }
+.shop-item .name { font-weight: 600; }
+.shop-item .sub { font-size: 12px; color: #8fa9c2; }
+.buy {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--coral);
+  color: var(--coral);
+  white-space: nowrap;
+}
+.owned { border-color: rgba(79, 209, 165, 0.6); color: var(--kelp); }
+
+.tabbar {
+  display: flex;
+  border-top: 1px solid rgba(143, 169, 194, 0.22);
+  background: var(--abyss);
+  padding: 9px 0 16px;
+}
+.tabbar span {
+  flex: 1;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5b7488;
+}
+.tabbar span.active { color: var(--coral); }
+
+.note { max-width: 34ch; display: flex; flex-direction: column; gap: 0.6rem; }
+.screen canvas { display: block; width: 100%; height: 100%; }

@@ -1,0 +1,95 @@
+<!-- @dsCard group="Screens" -->
+<title>Shop Screen</title>
+<style>
+  <!-- @include tokens.css -->
+  <!-- @include phone.css -->
+
+  .mock-banner {
+    border: 1px dashed rgba(255, 209, 102, 0.55);
+    border-radius: 10px;
+    padding: 7px 10px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    color: var(--sun);
+  }
+</style>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:0.5rem">
+    <p class="eyebrow">Screen 5 of 5 · milestone M6a</p>
+    <h1>Shop</h1>
+  </header>
+
+  <div class="phone-row">
+    <div class="phone">
+      <div class="screen">
+        <div class="status"><span>9:41</span><span>100%</span></div>
+        <div class="screen-body">
+          <h4>Shop</h4>
+          <div class="mock-banner">MOCK PROVIDER — NO REAL CHARGES</div>
+
+          <p class="kicker">Species</p>
+          <div class="shop-item">
+            <div class="swatch" style="background:linear-gradient(140deg,#FF8A65,#FFD166)"></div>
+            <div class="grow">
+              <div class="name">Clown</div>
+              <div class="sub">Starter species</div>
+            </div>
+            <span class="buy owned">Owned</span>
+          </div>
+          <div class="shop-item">
+            <div class="swatch" style="background:linear-gradient(140deg,#5B9BD5,#F2A65A)"></div>
+            <div class="grow">
+              <div class="name">Mandarin</div>
+              <div class="sub">Slow drifter · 3 stages</div>
+            </div>
+            <span class="buy">$2.99</span>
+          </div>
+
+          <p class="kicker" style="margin-top:2px">Tanks</p>
+          <div class="shop-item">
+            <div class="swatch" style="background:#16304A;border:1px solid rgba(159,216,240,0.5)"></div>
+            <div class="grow">
+              <div class="name">Reef Rectangle</div>
+              <div class="sub">Widest swimming room</div>
+            </div>
+            <span class="buy owned">Owned</span>
+          </div>
+          <div class="shop-item">
+            <div class="swatch" style="background:#16304A;border:1px solid rgba(159,216,240,0.5);border-radius:50%"></div>
+            <div class="grow">
+              <div class="name">Moon Bowl</div>
+              <div class="sub">Fish arc around the curve</div>
+            </div>
+            <span class="buy">$1.99</span>
+          </div>
+
+          <button class="pill ghost" style="margin-top:auto" type="button">Restore purchases</button>
+        </div>
+        <div class="tabbar">
+          <span>Focus</span><span>Aquarium</span><span>Stats</span><span class="active">Shop</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <p class="eyebrow">Notes</p>
+      <p class="muted">
+        Every purchase here runs through <code>MockEntitlementProvider</code>. The whole paywall,
+        unlock animation and restore flow are demoable end to end without an Apple Developer
+        account — that is the point of milestone M6a, and it is the checkpoint for deciding
+        whether the app is worth the $99.
+      </p>
+      <p class="muted">
+        The banner is a dev-menu toggle, not shipped copy. It exists so a mock purchase can never
+        be mistaken for a real one during testing.
+      </p>
+      <p class="muted">
+        Tank shapes sit in the same list as species deliberately — they are the cheaper, bounded
+        catalogue. See <code>docs/3D_AQUARIUM_REPORT.md</code> for why species, not tanks, decide
+        the 2D-versus-3D question.
+      </p>
+    </div>
+  </div>
+</div>

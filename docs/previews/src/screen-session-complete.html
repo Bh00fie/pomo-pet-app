@@ -1,0 +1,86 @@
+<!-- @dsCard group="Screens" -->
+<title>Session Complete Screen</title>
+<style>
+  <!-- @include tokens.css -->
+  <!-- @include phone.css -->
+
+  .xp-track {
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(143, 169, 194, 0.2);
+    overflow: hidden;
+  }
+  .xp-fill { height: 100%; width: 71%; background: linear-gradient(90deg, var(--kelp), var(--sun)); }
+  .burst {
+    align-self: center;
+    width: 190px;
+    height: 190px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: radial-gradient(circle, rgba(255, 209, 102, 0.28), rgba(255, 209, 102, 0) 68%);
+    font-size: 62px;
+  }
+</style>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:0.5rem">
+    <p class="eyebrow">Screen 2 of 5 · milestone M2 → M3</p>
+    <h1>Session complete</h1>
+  </header>
+
+  <div class="phone-row">
+    <div class="phone">
+      <div class="screen">
+        <div class="status"><span>9:41</span><span>100%</span></div>
+        <div class="screen-body">
+          <p class="kicker">25 minutes · focus</p>
+          <h4>Pip grew.</h4>
+
+          <div class="burst">🐠</div>
+
+          <div class="tile">
+            <div style="display:flex;justify-content:space-between;align-items:baseline">
+              <p class="kicker">Juvenile</p>
+              <span style="font-family:var(--mono);font-size:12px;color:var(--sun)">+25 XP</span>
+            </div>
+            <div class="xp-track"><div class="xp-fill"></div></div>
+            <div style="font-size:12px;color:#8fa9c2">
+              85 / 120 — merge 3 Juveniles to reach Elder
+            </div>
+          </div>
+
+          <div class="tiles">
+            <div class="tile">
+              <p class="kicker">Streak</p>
+              <span class="v" style="color:var(--kelp)">6d</span>
+            </div>
+            <div class="tile">
+              <p class="kicker">Today</p>
+              <span class="v">1h 15m</span>
+            </div>
+          </div>
+
+          <button class="pill" style="margin-top:auto" type="button">Start break</button>
+          <button class="pill ghost" type="button">See aquarium</button>
+        </div>
+        <div class="tabbar">
+          <span class="active">Focus</span><span>Aquarium</span><span>Stats</span><span>Shop</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <p class="eyebrow">Notes</p>
+      <p class="muted">
+        The XP bar fills but never crosses a stage on its own. Sessions grow a fish
+        <em>within</em> its stage; merging three same-stage fish is the only way across a
+        boundary. The caption says so on every completion, because the rule is not guessable.
+      </p>
+      <p class="muted">
+        The burst, ripple and glow come from the shared animation primitives built first in M2, so
+        the merge sequence in M3 reuses them rather than reinventing the timing.
+      </p>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,484 @@
+<!-- @dsCard group="Overview" -->
+<title>Pomo Pet — M0 + 3D Aquarium Review</title>
+<style>
+  <!-- @include tokens.css -->
+  <!-- @include phone.css -->
+
+  .lede { font-size: 1.06rem; max-width: 62ch; }
+
+  .verdict {
+    border-left: 3px solid var(--accent);
+    padding-left: 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+
+  .tanks { display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); }
+  .tank {
+    background: linear-gradient(180deg, #0b1e30, #04101a);
+    border: 1px solid var(--rule-strong);
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 0;
+  }
+  .tank canvas { display: block; width: 100%; aspect-ratio: 4 / 3; }
+  .tank figcaption {
+    padding: 0.8rem 1rem 1rem;
+    border-top: 1px solid rgba(147, 174, 196, 0.16);
+    color: #d7e8f4;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+  .tank h3 { color: #f0f8ff; }
+  .tank p { font-size: 0.85rem; color: #8fa9c2; margin: 0; }
+  .tank .meta {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: #5b7488;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding-top: 0.2rem;
+  }
+  .price { color: var(--coral); }
+  .free { color: var(--kelp); }
+
+  .controls { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .controls button {
+    font: inherit;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    padding: 0.3rem 0.8rem;
+    border-radius: 3px;
+    border: 1px solid var(--rule-strong);
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .controls button[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #04101a;
+  }
+
+  .rail { display: flex; gap: 1.5rem; overflow-x: auto; padding-bottom: 0.75rem; }
+  .rail .phone { flex: 0 0 264px; width: 264px; }
+  .rail .screen { height: 545px; font-size: 13px; }
+  .rail .dial { width: 176px; height: 176px; }
+  .rail .time { font-size: 38px; }
+  .rail figure { margin: 0; display: flex; flex-direction: column; gap: 0.6rem; flex: none; }
+  .rail figcaption { width: 264px; }
+
+  .tank-viewport {
+    flex: 1;
+    min-height: 0;
+    margin: 0 -20px;
+    background: linear-gradient(180deg, #0b1e30, #04101a);
+    position: relative;
+  }
+  .merge-bar {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 10px;
+    background: rgba(7, 19, 31, 0.86);
+    border: 1px solid rgba(143, 169, 194, 0.28);
+    border-radius: 12px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .burst {
+    align-self: center;
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: radial-gradient(circle, rgba(255, 209, 102, 0.28), rgba(255, 209, 102, 0) 68%);
+    font-size: 52px;
+  }
+  .xp-track { height: 7px; border-radius: 999px; background: rgba(143, 169, 194, 0.2); overflow: hidden; }
+  .xp-fill { height: 100%; width: 71%; background: linear-gradient(90deg, var(--kelp), var(--sun)); }
+  .mock-banner {
+    border: 1px dashed rgba(255, 209, 102, 0.55);
+    border-radius: 8px;
+    padding: 6px 9px;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
+    color: var(--sun);
+  }
+</style>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:0.7rem">
+    <p class="eyebrow">Pomo Pet · design review · 2 August 2026</p>
+    <h1>M0 is scaffolded, and 3D was put on trial</h1>
+    <p class="lede muted">
+      Two pieces of work. The Expo SDK 54 app now exists, type-checks and bundles. And the
+      question the Forest app raised — should the aquarium be real 3D? — has a working prototype
+      and an answer.
+    </p>
+  </header>
+
+  <div class="verdict">
+    <span class="tag tag-warn">Recommendation · defer 3D to v2</span>
+    <p class="muted">
+      3D is <strong>feasible</strong> — it runs in App Store Expo Go with no dev client, so the
+      free build plan survives. It is deferred because a new fish species costs
+      <strong>hours</strong> as a 2D parameter record and <strong>days</strong> as a modelled,
+      rigged 3D asset — and selling species is the business model. Everything below is the
+      evidence.
+    </p>
+  </div>
+
+  <section>
+    <p class="eyebrow">The spike · three tank shapes, running</p>
+    <h2>Fish behaviour is authored once; each tank supplies a containment function</h2>
+    <p class="muted">
+      Real swim math and real fish geometry from <code>src/features/aquarium3d/</code>, ported to a
+      2D canvas so this page stays 25 KB instead of shipping three.js. What it shows faithfully is
+      the shape language and the motion. What it cannot show is material quality or frame cost.
+    </p>
+
+    <div class="controls" role="group" aria-label="Fish count">
+      <span class="eyebrow" style="margin-right:0.25rem">Fish</span>
+      <button type="button" data-count="6">6</button>
+      <button type="button" data-count="12" aria-pressed="true">12</button>
+      <button type="button" data-count="20">20</button>
+      <button type="button" data-count="40">40</button>
+      <span class="muted" style="font-size:0.85rem">At 20: 1,760 triangles, ~80 draw calls.</span>
+    </div>
+
+    <div class="tanks">
+      <figure class="tank">
+        <canvas data-tank="rectangular" data-count="12" aria-label="Rectangular aquarium with swimming fish"></canvas>
+        <figcaption>
+          <h3>Reef Rectangle</h3>
+          <p>The classic glass box. Widest swimming room, best for a full shoal.</p>
+          <span class="meta"><span>per-axis clamp</span><span class="free">Included</span></span>
+        </figcaption>
+      </figure>
+      <figure class="tank">
+        <canvas data-tank="bowl" data-count="12" aria-label="Round bowl aquarium with swimming fish"></canvas>
+        <figcaption>
+          <h3>Moon Bowl</h3>
+          <p>Fish arc around the curve instead of pacing a wall. This is the shape that argues hardest for 3D.</p>
+          <span class="meta"><span>sphere normalise</span><span class="price">$1.99</span></span>
+        </figcaption>
+      </figure>
+      <figure class="tank">
+        <canvas data-tank="column" data-count="12" aria-label="Tall cylindrical aquarium with swimming fish"></canvas>
+        <figcaption>
+          <h3>Kelp Column</h3>
+          <p>Tall and narrow. Fish spiral vertically, which suits a phone held in portrait.</p>
+          <span class="meta"><span>radial clamp</span><span class="price">$1.99</span></span>
+        </figcaption>
+      </figure>
+    </div>
+
+    <div class="panel">
+      <p class="eyebrow">Why tank shapes are not the deciding factor</p>
+      <p class="muted">
+        Adding a SKU means adding a record plus one containment function — a box clamps per axis, a
+        cylinder clamps the horizontal radius, a bowl normalises onto a sphere. Because containment
+        <em>is</em> the shape equation rather than a per-frame collision test, fish can never clip
+        the glass. The identical pattern works in 2D with a Skia <code>Path</code> and a clip. 3D
+        makes a round bowl a better purchase; it does not make it a possible one.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Measured, on this machine</p>
+    <h2>What the 3D stack actually costs</h2>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Reading</th><th>2D Skia (main)</th><th>With 3D (explore branch)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>iOS Hermes bundle</td><td class="num">3.81 MB</td><td class="num">5.49 MB (+44%)</td></tr>
+          <tr><td>External art assets</td><td class="num">none</td><td class="num">none yet — add 2–6 MB</td></tr>
+          <tr><td>Triangles, 20 fish</td><td class="num">n/a</td><td class="num">1,760</td></tr>
+          <tr><td>Draw calls, 20 fish</td><td class="num">n/a</td><td class="num">~80, uninstanced</td></tr>
+          <tr><td>iOS graphics backend</td><td class="num">Metal</td><td class="num">OpenGL ES (EAGL)</td></tr>
+          <tr><td>Animation thread</td><td class="num">UI (worklets)</td><td class="num">JS (rAF)</td></tr>
+          <tr><td>Runs in App Store Expo Go</td><td class="num">yes</td><td class="num">yes</td></tr>
+          <tr><td><code>expo-doctor</code></td><td class="num">18/18</td><td class="num">18/18</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted" style="font-size:0.9rem">
+      The <code>expo-gl</code> backend finding came from reading the shipped source:
+      <code>ios/EXGLContext.mm</code> creates an <code>EAGLContext</code> and renders into a
+      <code>CAEAGLLayer</code>. That is OpenGL ES, which Apple deprecated in 2018 — not Metal, and
+      not ANGLE-on-Metal. Skia is on Metal. A slow-moving risk, but it points the wrong way.
+    </p>
+    <p class="muted" style="font-size:0.9rem">
+      <strong>Not measured:</strong> frame rate, battery, thermals. Nothing ran on a physical
+      iPhone. Those figures in the full report are reasoned estimates and are labelled as such.
+    </p>
+  </section>
+
+  <section>
+    <p class="eyebrow">The app · five screens from the docs</p>
+    <h2>What M1 through M6a is building toward</h2>
+    <p class="muted">
+      Styled from the real tokens in <code>src/theme/</code>, so these and the app cannot drift.
+      Scroll sideways.
+    </p>
+
+    <div class="rail">
+      <figure>
+        <div class="phone">
+          <div class="screen">
+            <div class="status"><span>9:41</span><span>100%</span></div>
+            <div class="screen-body">
+              <p class="kicker">Focus · session 3 of 4</p>
+              <div class="dial">
+                <div class="dial-inner">
+                  <div class="time">15:32</div>
+                  <p class="kicker" style="margin-top:3px">remaining</p>
+                </div>
+              </div>
+              <div class="dots">
+                <span class="dot on"></span><span class="dot on"></span>
+                <span class="dot on"></span><span class="dot"></span>
+              </div>
+              <button class="pill" type="button">Give up</button>
+              <div class="tile" style="margin-top:auto">
+                <p class="kicker">At stake</p>
+                <div style="display:flex;align-items:center;gap:9px">
+                  <span style="font-size:20px">🐠</span>
+                  <div>
+                    <div style="font-weight:600">Pip · Juvenile</div>
+                    <div style="font-size:11px;color:#8fa9c2">+15 XP if you finish</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="tabbar">
+              <span class="active">Focus</span><span>Aquarium</span><span>Stats</span><span>Shop</span>
+            </div>
+          </div>
+        </div>
+        <figcaption class="muted" style="font-size:0.85rem">
+          <strong style="color:var(--ink)">Focus · M1.</strong> Counts down from an absolute
+          <code>endsAt</code>, never a decrementing counter. The control says "Give up", not
+          "Pause" — naming the consequence is the accountability loop.
+        </figcaption>
+      </figure>
+
+      <figure>
+        <div class="phone">
+          <div class="screen">
+            <div class="status"><span>9:41</span><span>100%</span></div>
+            <div class="screen-body">
+              <p class="kicker">25 minutes · focus</p>
+              <h4>Pip grew.</h4>
+              <div class="burst">🐠</div>
+              <div class="tile">
+                <div style="display:flex;justify-content:space-between;align-items:baseline">
+                  <p class="kicker">Juvenile</p>
+                  <span style="font-family:var(--mono);font-size:11px;color:var(--sun)">+25 XP</span>
+                </div>
+                <div class="xp-track"><div class="xp-fill"></div></div>
+                <div style="font-size:11px;color:#8fa9c2">85 / 120 — merge 3 to reach Elder</div>
+              </div>
+              <div class="tiles">
+                <div class="tile"><p class="kicker">Streak</p><span class="v" style="color:var(--kelp)">6d</span></div>
+                <div class="tile"><p class="kicker">Today</p><span class="v">1h 15m</span></div>
+              </div>
+              <button class="pill" style="margin-top:auto" type="button">Start break</button>
+            </div>
+            <div class="tabbar">
+              <span class="active">Focus</span><span>Aquarium</span><span>Stats</span><span>Shop</span>
+            </div>
+          </div>
+        </div>
+        <figcaption class="muted" style="font-size:0.85rem">
+          <strong style="color:var(--ink)">Session complete · M2→M3.</strong> The bar fills but
+          never crosses a stage. Sessions grow a fish within its stage; merging three is the only
+          way across — stated every time, because the rule is not guessable.
+        </figcaption>
+      </figure>
+
+      <figure>
+        <div class="phone">
+          <div class="screen">
+            <div class="status"><span>9:41</span><span>100%</span></div>
+            <div class="screen-body">
+              <div style="display:flex;justify-content:space-between;align-items:baseline">
+                <h4>Your reef</h4>
+                <span style="font-family:var(--mono);font-size:10px;color:#8fa9c2">7 fish</span>
+              </div>
+              <div class="tank-viewport">
+                <canvas data-tank="rectangular" data-count="7" aria-label="Aquarium with seven fish"></canvas>
+                <div class="merge-bar">
+                  <span style="font-size:17px">✨</span>
+                  <div style="flex:1">
+                    <div style="font-weight:600;font-size:12px">3 Juveniles ready to merge</div>
+                    <div style="font-size:10px;color:#8fa9c2">Creates one Elder</div>
+                  </div>
+                  <span class="buy">Merge</span>
+                </div>
+              </div>
+            </div>
+            <div class="tabbar">
+              <span>Focus</span><span class="active">Aquarium</span><span>Stats</span><span>Shop</span>
+            </div>
+          </div>
+        </div>
+        <figcaption class="muted" style="font-size:0.85rem">
+          <strong style="color:var(--ink)">Aquarium · M2/M3.</strong> Showing the 3D spike for
+          comparison — the MVP ships procedural 2D Skia fish here. Sick fish desaturate and recover;
+          they are never deleted.
+        </figcaption>
+      </figure>
+
+      <figure>
+        <div class="phone">
+          <div class="screen">
+            <div class="status"><span>9:41</span><span>100%</span></div>
+            <div class="screen-body">
+              <h4>Stats</h4>
+              <div class="tiles">
+                <div class="tile"><p class="kicker">Today</p><span class="v">1h 15m</span></div>
+                <div class="tile"><p class="kicker">Streak</p><span class="v" style="color:var(--kelp)">6d</span></div>
+                <div class="tile"><p class="kicker">All-time</p><span class="v">42.5h</span></div>
+                <div class="tile"><p class="kicker">Sessions</p><span class="v">102</span></div>
+              </div>
+              <div class="tile">
+                <p class="kicker">This week</p>
+                <div class="bars" aria-hidden="true">
+                  <div style="height:46%"></div><div style="height:72%"></div>
+                  <div style="height:30%"></div><div style="height:88%"></div>
+                  <div style="height:60%"></div><div style="height:14%"></div>
+                  <div style="height:52%"></div>
+                </div>
+                <div class="bar-labels">
+                  <span>M</span><span>T</span><span>W</span><span>T</span>
+                  <span>F</span><span>S</span><span>S</span>
+                </div>
+              </div>
+              <div class="tile">
+                <p class="kicker">Left early</p>
+                <div style="display:flex;align-items:baseline;gap:7px">
+                  <span class="v" style="color:var(--danger)">7</span>
+                  <span style="font-size:11px;color:#8fa9c2">6.4% of sessions</span>
+                </div>
+              </div>
+            </div>
+            <div class="tabbar">
+              <span>Focus</span><span>Aquarium</span><span class="active">Stats</span><span>Shop</span>
+            </div>
+          </div>
+        </div>
+        <figcaption class="muted" style="font-size:0.85rem">
+          <strong style="color:var(--ink)">Stats · M5.</strong> Streaks use the local calendar date,
+          unit-tested against DST and timezone edges. "Left early" is reported plainly — the penalty
+          already happened in the tank.
+        </figcaption>
+      </figure>
+
+      <figure>
+        <div class="phone">
+          <div class="screen">
+            <div class="status"><span>9:41</span><span>100%</span></div>
+            <div class="screen-body">
+              <h4>Shop</h4>
+              <div class="mock-banner">MOCK PROVIDER — NO REAL CHARGES</div>
+              <p class="kicker">Species</p>
+              <div class="shop-item">
+                <div class="swatch" style="background:linear-gradient(140deg,#FF8A65,#FFD166)"></div>
+                <div class="grow"><div class="name">Clown</div><div class="sub">Starter species</div></div>
+                <span class="buy owned">Owned</span>
+              </div>
+              <div class="shop-item">
+                <div class="swatch" style="background:linear-gradient(140deg,#5B9BD5,#F2A65A)"></div>
+                <div class="grow"><div class="name">Mandarin</div><div class="sub">Slow drifter</div></div>
+                <span class="buy">$2.99</span>
+              </div>
+              <p class="kicker">Tanks</p>
+              <div class="shop-item">
+                <div class="swatch" style="background:#16304A;border:1px solid rgba(159,216,240,0.5)"></div>
+                <div class="grow"><div class="name">Reef Rectangle</div><div class="sub">Widest room</div></div>
+                <span class="buy owned">Owned</span>
+              </div>
+              <div class="shop-item">
+                <div class="swatch" style="background:#16304A;border:1px solid rgba(159,216,240,0.5);border-radius:50%"></div>
+                <div class="grow"><div class="name">Moon Bowl</div><div class="sub">Fish arc around the curve</div></div>
+                <span class="buy">$1.99</span>
+              </div>
+              <button class="pill ghost" style="margin-top:auto" type="button">Restore purchases</button>
+            </div>
+            <div class="tabbar">
+              <span>Focus</span><span>Aquarium</span><span>Stats</span><span class="active">Shop</span>
+            </div>
+          </div>
+        </div>
+        <figcaption class="muted" style="font-size:0.85rem">
+          <strong style="color:var(--ink)">Shop · M6a.</strong> Everything runs through
+          <code>MockEntitlementProvider</code>. The full paywall is demoable with no Apple Developer
+          account — that is the checkpoint for deciding the app is worth the $99.
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Repository state</p>
+    <div class="grid">
+      <div class="panel">
+        <span class="tag tag-good">main</span>
+        <h3>M0 scaffolded</h3>
+        <p class="muted" style="font-size:0.9rem">
+          Expo SDK 54, Expo Router, Reanimated 4 + Skia, Zustand + AsyncStorage with a versioned
+          schema and migration runner from commit one. <code>tsc</code> clean,
+          <code>expo-doctor</code> 18/18, iOS bundle exports.
+        </p>
+        <p class="muted" style="font-size:0.9rem">
+          One item still open: opening it in App Store Expo Go on a real iPhone. That needs your
+          phone, so M0 stays marked in-progress.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tag tag-info">explore/3d-aquarium</span>
+        <h3>Parked, not merged</h3>
+        <p class="muted" style="font-size:0.9rem">
+          Working prototype plus <code>docs/3D_AQUARIUM_REPORT.md</code>. No PR — this is a parallel
+          exploration, not a scope change. The committed 2D Skia direction is unchanged.
+        </p>
+        <p class="muted" style="font-size:0.9rem">
+          To try it: <code>git checkout explore/3d-aquarium &amp;&amp; npm install &amp;&amp; npx expo
+          start</code>, then open the "3D" tab. Ten minutes there turns the estimates into facts.
+        </p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script type="module">
+  <!-- @include tank-renderer.js -->
+
+  const scenes = [...document.querySelectorAll('canvas[data-tank]')].map((c) =>
+    createTankScene(c, TANKS[c.dataset.tank], { fishCount: Number(c.dataset.count) || 12 }),
+  );
+
+  // The fish-count control only drives the three shape-comparison tanks; the aquarium screen
+  // mock stays at seven, because that is the number its copy claims.
+  const adjustable = scenes.slice(0, 3);
+  const buttons = [...document.querySelectorAll('.controls button')];
+  for (const button of buttons) {
+    button.addEventListener('click', () => {
+      for (const other of buttons) other.setAttribute('aria-pressed', String(other === button));
+      const n = Number(button.dataset.count);
+      for (const scene of adjustable) scene.setFishCount(n);
+    });
+  }
+</script>

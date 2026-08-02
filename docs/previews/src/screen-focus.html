@@ -1,0 +1,69 @@
+<!-- @dsCard group="Screens" -->
+<title>Focus Screen</title>
+<style>
+  <!-- @include tokens.css -->
+  <!-- @include phone.css -->
+</style>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:0.5rem">
+    <p class="eyebrow">Screen 1 of 5 · milestone M1</p>
+    <h1>Focus</h1>
+  </header>
+
+  <div class="phone-row">
+    <div class="phone">
+      <div class="screen">
+        <div class="status"><span>9:41</span><span>100%</span></div>
+        <div class="screen-body">
+          <p class="kicker">Focus · session 3 of 4</p>
+
+          <div class="dial">
+            <div class="dial-inner">
+              <div class="time">15:32</div>
+              <p class="kicker" style="margin-top:4px">remaining</p>
+            </div>
+          </div>
+
+          <div class="dots">
+            <span class="dot on"></span><span class="dot on"></span>
+            <span class="dot on"></span><span class="dot"></span>
+          </div>
+
+          <button class="pill" type="button">Give up</button>
+
+          <div class="tile" style="margin-top:auto">
+            <p class="kicker">At stake</p>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:22px">🐠</span>
+              <div>
+                <div style="font-weight:600">Pip · Juvenile</div>
+                <div style="font-size:12px;color:#8fa9c2">+15 XP if you finish</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <span class="active">Focus</span><span>Aquarium</span><span>Stats</span><span>Shop</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <p class="eyebrow">Notes</p>
+      <p class="muted">
+        The countdown is derived from an absolute <code>endsAt</code> timestamp, never a
+        decrementing counter — JS timers do not survive backgrounding. A local notification is
+        scheduled at <code>endsAt</code> and cancelled on pause or reset.
+      </p>
+      <p class="muted">
+        The single control is <strong>Give up</strong>, not Pause. Naming the consequence is the
+        accountability loop; a neutral "Pause" would hide it.
+      </p>
+      <p class="muted">
+        Showing the fish at stake is what makes the penalty legible <em>before</em> it happens
+        rather than after.
+      </p>
+    </div>
+  </div>
+</div>
