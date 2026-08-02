@@ -5,6 +5,8 @@ import {
   getSpecies,
   GOLDEN_KOI_SPECIES_ID,
   INDIGO_BETTA_SPECIES_ID,
+  SHARK_SPECIES_ID,
+  CLOWNFISH_SPECIES_ID,
   isMaxStage,
   isReadyToMerge,
   nextStage,
@@ -49,9 +51,15 @@ describe('getSpecies', () => {
 });
 
 describe('SPECIES catalog (docs/PLAN.md M6a — shop sells species)', () => {
-  it('has three species: the starter plus two shop species', () => {
+  it('has five species: the starter plus four shop species', () => {
     expect(Object.keys(SPECIES).sort()).toEqual(
-      [STARTER_SPECIES_ID, GOLDEN_KOI_SPECIES_ID, INDIGO_BETTA_SPECIES_ID].sort(),
+      [
+        STARTER_SPECIES_ID,
+        GOLDEN_KOI_SPECIES_ID,
+        INDIGO_BETTA_SPECIES_ID,
+        SHARK_SPECIES_ID,
+        CLOWNFISH_SPECIES_ID,
+      ].sort(),
     );
   });
 
@@ -69,7 +77,8 @@ describe('SPECIES catalog (docs/PLAN.md M6a — shop sells species)', () => {
         expect(params.bodyLength).toBeGreaterThan(0);
         expect(params.bodyHeight).toBeGreaterThan(0);
         expect(params.tailSpan).toBeGreaterThan(0);
-        expect(params.finScale).toBeGreaterThan(0);
+        expect(params.dorsalFinScale).toBeGreaterThan(0);
+        expect(params.pectoralFinScale).toBeGreaterThan(0);
       }
     }
   });
@@ -103,12 +112,58 @@ describe('SPECIES catalog (docs/PLAN.md M6a — shop sells species)', () => {
     expect(betta.hue).toBeLessThanOrEqual(280);
 
     for (const stage of STAGES) {
-      expect(betta.stageParams[stage].finScale).toBeGreaterThan(
-        getSpecies(STARTER_SPECIES_ID).stageParams[stage].finScale,
+      expect(betta.stageParams[stage].dorsalFinScale).toBeGreaterThan(
+        getSpecies(STARTER_SPECIES_ID).stageParams[stage].dorsalFinScale,
       );
-      expect(betta.stageParams[stage].finScale).toBeGreaterThan(
-        getSpecies(GOLDEN_KOI_SPECIES_ID).stageParams[stage].finScale,
+      expect(betta.stageParams[stage].dorsalFinScale).toBeGreaterThan(
+        getSpecies(GOLDEN_KOI_SPECIES_ID).stageParams[stage].dorsalFinScale,
       );
+      expect(betta.stageParams[stage].pectoralFinScale).toBeGreaterThan(
+        getSpecies(STARTER_SPECIES_ID).stageParams[stage].pectoralFinScale,
+      );
+      expect(betta.stageParams[stage].pectoralFinScale).toBeGreaterThan(
+        getSpecies(GOLDEN_KOI_SPECIES_ID).stageParams[stage].pectoralFinScale,
+      );
+    }
+  });
+
+  it('the three original species have dorsalFinScale === pectoralFinScale at every stage — the '
+    + 'fin-scale split must not change their behavior', () => {
+    for (const id of [STARTER_SPECIES_ID, GOLDEN_KOI_SPECIES_ID, INDIGO_BETTA_SPECIES_ID]) {
+      const species = getSpecies(id);
+      for (const stage of STAGES) {
+        const params = species.stageParams[stage];
+        expect(params.dorsalFinScale).toBe(params.pectoralFinScale);
+        expect(params.tailShape).toBeUndefined();
+        expect(params.pattern).toBeUndefined();
+      }
+    }
+  });
+
+  it('Reef Shark reads as a cool, low-saturation grey/blue-grey, with an elongated body, a '
+    + 'proportionally larger dorsal fin than pectoral fins, and a crescent tail', () => {
+    const shark = getSpecies(SHARK_SPECIES_ID);
+    expect(shark.name).toBe('Reef Shark');
+    expect(shark.saturation).toBeLessThanOrEqual(25);
+    expect(shark.hue).toBeGreaterThanOrEqual(180);
+    expect(shark.hue).toBeLessThanOrEqual(240);
+
+    for (const stage of STAGES) {
+      const params = shark.stageParams[stage];
+      expect(params.tailShape).toBe('crescent');
+      expect(params.dorsalFinScale).toBeGreaterThan(params.pectoralFinScale);
+      // Elongated torpedo body: length-to-height ratio well past every other species' ~1.5-1.8.
+      expect(params.bodyLength / params.bodyHeight).toBeGreaterThan(2.2);
+    }
+  });
+
+  it('Clownfish is a vivid orange with a white stripe pattern at every stage', () => {
+    const clownfish = getSpecies(CLOWNFISH_SPECIES_ID);
+    expect(clownfish.name).toBe('Clownfish');
+    expect(clownfish.saturation).toBeGreaterThan(70);
+
+    for (const stage of STAGES) {
+      expect(clownfish.stageParams[stage].pattern).toBe('stripes');
     }
   });
 });

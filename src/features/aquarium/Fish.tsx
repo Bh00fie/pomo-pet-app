@@ -1,4 +1,4 @@
-import { Circle, Group, Oval, Path, Skia, type SkPath } from '@shopify/react-native-skia';
+import { Circle, Group, Oval, Path, Rect, Skia, type SkPath } from '@shopify/react-native-skia';
 import { useMemo } from 'react';
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
 
@@ -46,6 +46,20 @@ export function FishSprite({ fish, kinematics, elapsed, seed }: FishSpriteProps)
   const tailPath = useMemo(() => buildFinPath(geometry.tail), [geometry]);
   const dorsalPath = useMemo(() => buildFinPath(geometry.dorsal), [geometry]);
   const pectoralPath = useMemo(() => buildFinPath(geometry.pectoral), [geometry]);
+  // Only built for species with a `pattern` (currently just the clownfish's stripes) — clips the
+  // pattern to the body's own oval so a band never spills past the silhouette. `null` for every
+  // other species, so nothing extra is allocated for the three original fish.
+  const bodyClipPath = useMemo(() => {
+    if (geometry.stripes.length === 0) return null;
+    const path = Skia.Path.Make();
+    path.addOval({
+      x: -geometry.bodyRadiusX,
+      y: -geometry.bodyRadiusY,
+      width: geometry.bodyRadiusX * 2,
+      height: geometry.bodyRadiusY * 2,
+    });
+    return path;
+  }, [geometry]);
 
   // Deterministic per-fish phase/speed so the school doesn't beat in unison — stable across
   // re-renders since it only depends on `seed` (the fish's index in the tank).
@@ -136,6 +150,29 @@ export function FishSprite({ fish, kinematics, elapsed, seed }: FishSpriteProps)
         color={belly}
         opacity={0.55}
       />
+
+      {bodyClipPath && (
+        <Group clip={bodyClipPath}>
+          {geometry.stripes.map((band, i) => (
+            <Group key={i}>
+              <Rect
+                x={band.x - band.width / 2 - band.edgeWidth}
+                y={-geometry.bodyRadiusY * 1.1}
+                width={band.width + band.edgeWidth * 2}
+                height={geometry.bodyRadiusY * 2.2}
+                color={colors.abyss}
+              />
+              <Rect
+                x={band.x - band.width / 2}
+                y={-geometry.bodyRadiusY * 1.1}
+                width={band.width}
+                height={geometry.bodyRadiusY * 2.2}
+                color="#ffffff"
+              />
+            </Group>
+          ))}
+        </Group>
+      )}
 
       <Circle cx={geometry.eyeCenter.x} cy={geometry.eyeCenter.y} r={geometry.eyeRadius} color={colors.abyss} />
       <Circle

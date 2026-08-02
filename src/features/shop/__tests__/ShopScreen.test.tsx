@@ -42,6 +42,7 @@ jest.mock('@shopify/react-native-skia', () => {
     Circle: inert,
     Oval: inert,
     Path: inert,
+    Rect: inert,
     Skia: { Path: { Make: () => path } },
   };
 });

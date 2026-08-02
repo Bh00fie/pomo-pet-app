@@ -1,4 +1,4 @@
-import { Canvas, Circle, Group, Oval, Path, Skia, type SkPath } from '@shopify/react-native-skia';
+import { Canvas, Circle, Group, Oval, Path, Rect, Skia, type SkPath } from '@shopify/react-native-skia';
 import { useMemo } from 'react';
 
 import { HEALTH } from '@/config';
@@ -41,6 +41,19 @@ export function SpeciesSwatch({ speciesId, size = 44, locked = false }: SpeciesS
   const geometry = useMemo(() => buildFishGeometry(stageParams), [stageParams]);
   const tailPath = useMemo(() => buildFinPath(geometry.tail), [geometry]);
   const dorsalPath = useMemo(() => buildFinPath(geometry.dorsal), [geometry]);
+  // `null` for every species with no `pattern` (still all but the clownfish), so nothing extra is
+  // allocated for them — see `Fish.tsx`'s identical treatment.
+  const bodyClipPath = useMemo(() => {
+    if (geometry.stripes.length === 0) return null;
+    const path = Skia.Path.Make();
+    path.addOval({
+      x: -geometry.bodyRadiusX,
+      y: -geometry.bodyRadiusY,
+      width: geometry.bodyRadiusX * 2,
+      height: geometry.bodyRadiusY * 2,
+    });
+    return path;
+  }, [geometry]);
 
   const saturation = locked ? species.saturation * HEALTH.sickSaturationMultiplier : species.saturation;
   const bodyColor = hslToHex(species.hue, saturation, species.lightness);
@@ -71,6 +84,28 @@ export function SpeciesSwatch({ speciesId, size = 44, locked = false }: SpeciesS
           height={geometry.bodyRadiusY * 2}
           color={bodyColor}
         />
+        {bodyClipPath && (
+          <Group clip={bodyClipPath}>
+            {geometry.stripes.map((band, i) => (
+              <Group key={i}>
+                <Rect
+                  x={band.x - band.width / 2 - band.edgeWidth}
+                  y={-geometry.bodyRadiusY * 1.1}
+                  width={band.width + band.edgeWidth * 2}
+                  height={geometry.bodyRadiusY * 2.2}
+                  color={colors.abyss}
+                />
+                <Rect
+                  x={band.x - band.width / 2}
+                  y={-geometry.bodyRadiusY * 1.1}
+                  width={band.width}
+                  height={geometry.bodyRadiusY * 2.2}
+                  color="#ffffff"
+                />
+              </Group>
+            ))}
+          </Group>
+        )}
         <Circle cx={geometry.eyeCenter.x} cy={geometry.eyeCenter.y} r={geometry.eyeRadius} color={colors.abyss} />
       </Group>
     </Canvas>

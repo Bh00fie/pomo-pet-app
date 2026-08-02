@@ -81,6 +81,8 @@ export const SHOP = {
   speciesPriceUsd: {
     'golden-koi': 1.99,
     'indigo-betta': 2.99,
+    'reef-shark': 4.49,
+    clownfish: 3.99,
   } as Record<string, number>,
   /** Chance (0..1) a mock purchase fails on its own, so the shop UI has to render a real failure
    *  path rather than only ever observing success — see `MockEntitlementProvider`. */

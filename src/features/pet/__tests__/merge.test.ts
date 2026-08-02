@@ -1,5 +1,14 @@
 import { GROWTH } from '@/config';
-import { createFish, SPECIES_ORDER, GOLDEN_KOI_SPECIES_ID, STARTER_SPECIES_ID, type Fish } from '../model';
+import {
+  createFish,
+  SPECIES_ORDER,
+  GOLDEN_KOI_SPECIES_ID,
+  INDIGO_BETTA_SPECIES_ID,
+  SHARK_SPECIES_ID,
+  CLOWNFISH_SPECIES_ID,
+  STARTER_SPECIES_ID,
+  type Fish,
+} from '../model';
 import { evaluateMerge, isMergeEligibleStage } from '../merge';
 
 function fry(id: string, speciesId: string = STARTER_SPECIES_ID): Fish {
@@ -58,6 +67,46 @@ describe('evaluateMerge', () => {
     const fish = [fry('a'), fry('b'), fry('c', GOLDEN_KOI_SPECIES_ID)];
     const result = evaluateMerge({ fish, selectedIds: ['a', 'b', 'c'], now: 0, idFactory });
     expect(result).toEqual({ ok: false, reason: 'mixed-species' });
+  });
+
+  it('rejects a Reef Shark and a Clownfish merging together — new species merge only with '
+    + 'their own kind, same restriction as every existing species', () => {
+    const fish = [
+      fry('a', SHARK_SPECIES_ID),
+      fry('b', SHARK_SPECIES_ID),
+      fry('c', CLOWNFISH_SPECIES_ID),
+    ];
+    const result = evaluateMerge({ fish, selectedIds: ['a', 'b', 'c'], now: 0, idFactory });
+    expect(result).toEqual({ ok: false, reason: 'mixed-species' });
+  });
+
+  it.each([STARTER_SPECIES_ID, GOLDEN_KOI_SPECIES_ID, INDIGO_BETTA_SPECIES_ID])(
+    'rejects a Reef Shark merging with %s',
+    (otherSpecies) => {
+      const fish = [fry('a', SHARK_SPECIES_ID), fry('b', SHARK_SPECIES_ID), fry('c', otherSpecies)];
+      const result = evaluateMerge({ fish, selectedIds: ['a', 'b', 'c'], now: 0, idFactory });
+      expect(result).toEqual({ ok: false, reason: 'mixed-species' });
+    },
+  );
+
+  it.each([STARTER_SPECIES_ID, GOLDEN_KOI_SPECIES_ID, INDIGO_BETTA_SPECIES_ID])(
+    'rejects a Clownfish merging with %s',
+    (otherSpecies) => {
+      const fish = [fry('a', CLOWNFISH_SPECIES_ID), fry('b', CLOWNFISH_SPECIES_ID), fry('c', otherSpecies)];
+      const result = evaluateMerge({ fish, selectedIds: ['a', 'b', 'c'], now: 0, idFactory });
+      expect(result).toEqual({ ok: false, reason: 'mixed-species' });
+    },
+  );
+
+  it('still merges three same-species Reef Sharks and three same-species Clownfish normally', () => {
+    for (const speciesId of [SHARK_SPECIES_ID, CLOWNFISH_SPECIES_ID]) {
+      const fish = [fry('a', speciesId), fry('b', speciesId), fry('c', speciesId)];
+      const result = evaluateMerge({ fish, selectedIds: ['a', 'b', 'c'], now: 0, idFactory });
+      expect(result.ok).toBe(true);
+      if (!result.ok) continue;
+      expect(result.newFish.speciesId).toBe(speciesId);
+      expect(result.newFish.stage).toBe('juvenile');
+    }
   });
 
   it.each(

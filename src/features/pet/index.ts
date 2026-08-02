@@ -4,6 +4,8 @@ export {
   STARTER_SPECIES_ID,
   GOLDEN_KOI_SPECIES_ID,
   INDIGO_BETTA_SPECIES_ID,
+  SHARK_SPECIES_ID,
+  CLOWNFISH_SPECIES_ID,
   getSpecies,
   createFish,
   stageIndex,
@@ -15,7 +17,7 @@ export {
 } from './model';
 export type { Fish, FishHealth, SpeciesId, Stage, Species, StageVisualParams } from './model';
 export { buildFishGeometry } from './geometry';
-export type { FishGeometry, FinShape, FinSegment, Point } from './geometry';
+export type { FishGeometry, FinShape, FinSegment, Point, StripeBand } from './geometry';
 export { hslToHex } from './color';
 export { xpForFocusMs, applySessionReward } from './reward';
 export type { SessionRewardInput, SessionRewardResult } from './reward';
