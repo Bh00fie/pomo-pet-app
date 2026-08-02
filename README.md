@@ -6,21 +6,25 @@ the hit — that accountability loop (in the spirit of apps like Forest) is the 
 
 ## Status
 
-🏗 **M1 built — the timer works.** Start/pause/resume/reset run off an absolute-timestamp state
-machine (`endsAt`, never a decrementing counter), with customizable work/break lengths and a local
-notification scheduled for the end of the session. See [`docs/PLAN.md`](docs/PLAN.md) for the
-milestone sequence and what's actually verified.
+🏗 **M2 built — the timer works and it earns you a fish.** Start/pause/resume/reset run off an
+absolute-timestamp state machine (`endsAt`, never a decrementing counter), with customizable
+work/break lengths and a local notification scheduled for the end of the session. Finishing a
+focus session now hatches or grows a fish, drawn procedurally in Skia — body, tail and fins are
+parametric paths, so the three growth stages are parameter sets rather than separate assets — and
+the whole tank animates off a single shared frame clock. See [`docs/PLAN.md`](docs/PLAN.md) for
+the milestone sequence and what's actually verified.
 
-Open items both need a real iPhone: the M0 gate (the project opens in App Store Expo Go) and the
-M1 gate (the end-of-session notification genuinely fires). Everything machine-checkable —
-72 unit tests, type-check, `expo-doctor`, iOS bundle export — passes.
+Open items all need a real iPhone: the M0 gate (the project opens in App Store Expo Go), the M1
+gate (the end-of-session notification genuinely fires) and the M2 gate (the tank looks right and
+stays smooth with several fish). Everything machine-checkable — 114 unit tests, type-check,
+`expo-doctor`, iOS bundle export — passes.
 
 ## Running it
 
 ```sh
 npm install
 npx expo start   # scan the QR with App Store Expo Go (SDK 54)
-npm test         # jest-expo — timer engine + screen tests
+npm test         # jest-expo — timer engine, pet/reward domain, store migrations, screen tests
 npm run typecheck
 npm run doctor
 ```

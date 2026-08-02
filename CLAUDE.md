@@ -1,16 +1,19 @@
 # Project Context
 
-## Status: M1 (timer engine) built — M2 is next
+## Status: M2 (pet/zoo core + tank rendering) built — M3 is next
 
-The Expo app exists on `main`, builds, and has a working Pomodoro timer. `docs/PLAN.md` is the
-milestone sequence; M2 (pet/zoo core + Skia tank rendering) is the next thing to write.
+The Expo app exists on `main`, builds, has a working Pomodoro timer, and completed focus sessions
+now hatch/grow a procedurally drawn Skia fish that swims in the Aquarium tab. `docs/PLAN.md` is the
+milestone sequence; M3 (growth + merge) is the next thing to write — but read the open question
+about spawn cadence below first, it blocks the merge mechanic.
 
 ### Current repo state (2026-08-02)
 
 - `main` — Expo SDK 54 app. `app/` holds Expo Router routes only (thin re-exports); everything
   real is under `src/{config,features,store,anim,ui,theme}`. Zustand + AsyncStorage `persist`
   with `SCHEMA_VERSION` and a migration runner wired in from commit one
-  (`src/store/migrations.ts`). Aquarium/stats/shop screens are still labelled placeholders.
+  (`src/store/migrations.ts` — now at `SCHEMA_VERSION` 2, see the M2 review notes below). The
+  Focus and Aquarium screens are real; stats/shop are still labelled placeholders.
 - **Timer engine (M1) is real.** `src/features/timer/machine.ts` is a pure transition function
   (no React/RN/Expo imports — keep it that way) over
   `{ status, mode, endsAt, durationMs, pausedRemainingMs }`. Time is always absolute: a running
@@ -19,14 +22,74 @@ milestone sequence; M2 (pet/zoo core + Skia tank rendering) is the next thing to
   `useTimerStore.ts` (transient, unpersisted) applies the machine and owns the notification
   side effects; `useTimer.ts` is the React binding (tick cadence + `AppState` foreground
   re-read); `FocusScreen.tsx` renders it and holds no timing logic of its own.
-- **Tests exist and must stay green**: `npm test` (jest-expo preset), 72 tests across 5 suites in
-  `src/features/timer/__tests__/`. Note `@testing-library/react-native` v14 has an *async* API —
-  `render` and `fireEvent` must both be awaited.
-- Verified: `npm test` 72/72, `npx tsc --noEmit` clean, `npx expo-doctor` 18/18,
-  `npx expo export --platform ios` succeeds (4.02 MB Hermes bundle), `expo --version` → 54.x.
+- **Pet/zoo core + tank rendering (M2) is real.** `src/features/pet/` is the pure domain —
+  `model.ts` (Species/Stage/Fish, one starter species), `geometry.ts` (parametric fish shape),
+  `reward.ts` (spawn-vs-grow on session completion), all with no React/RN/Skia imports, same
+  discipline as the timer machine. `src/features/aquarium/` is the renderer: `Tank.tsx` draws
+  every fish on one Skia `Canvas`, `Fish.tsx` builds the paths, `steering.ts` is worklet-only
+  wander steering. `src/store/types.ts` re-exports `Fish` from `features/pet/model` rather than
+  defining a second copy — keep it that way, a duplicated persisted type is how the two drift.
+- **Animation architecture (decided at M2, keep it):**
+  - **One clock per tank, never one per fish.** `src/anim/useAquariumClock.ts` owns the only
+    `useFrameCallback` in the app; anything needing per-frame work threads a worklet through its
+    `onFrame`. Adding a second driver is the thing that will cost frames as fish counts grow.
+  - **No React state in a per-frame path.** Fish position/velocity/target live in Reanimated
+    mutables (`makeMutable`, held in a ref-keyed registry in `Tank.tsx`, because shared values
+    can't be created in a variable-length loop of hooks), and reach Skia via `useDerivedValue`.
+    The only `useState` in the tank is the `onLayout` size, which changes once.
+  - **`useReduceMotion` returns a duration *multiplier* (number), not a boolean.** Changed at M2.
+    Multiply a `withTiming` duration — or a per-frame delta — by it. Never write
+    `if (useReduceMotion())`: 0.35 is truthy and the check silently inverts.
+  - Motion tokens (`src/anim/motion.ts`) are the only source of durations/easings/springs.
+    `Ripple` and `ParticleBurst` are built and exported but not wired to a screen yet — they are
+    for the M3 merge sequence and the M4 penalty.
+- `useSessionReward` is mounted **once**, at `app/_layout.tsx`, so a session finishing on any tab
+  awards. It de-dupes on the timer's `endsAt` (stable per session) via a hook-local ref — that
+  guard is per hook instance, so **do not mount it a second time** or every session awards twice.
+- **Tests exist and must stay green**: `npm test` (jest-expo preset), 114 tests across 11 suites.
+  Note `@testing-library/react-native` v14 has an *async* API — `render` and `fireEvent` must both
+  be awaited. Worklet/`SharedValue` code (`steering.ts`) is deliberately untested — there is
+  nothing meaningful to assert without a native runtime; the plain-number math it composes with
+  (`geometry.ts`) is tested instead.
+- Verified independently on 2026-08-02 after the M2 build: `npm test` 114/114, `npx tsc --noEmit`
+  clean, `npx expo-doctor` 18/18, `npx expo export --platform ios` succeeds (4.67 MB Hermes
+  bundle, 4.02 MB at M1), `expo --version` → 54.x.
 - **Not verified**: anything needing the user's phone — that the app opens in App Store Expo Go
-  (the M0 gate), and that the scheduled end-of-session notification actually fires (the M1 gate).
-  Do not mark either done until they confirm.
+  (the M0 gate), that the scheduled end-of-session notification actually fires (the M1 gate), and
+  that the tank *looks* right and holds 60fps with several fish (the M2 gate). Do not mark any of
+  them done until they confirm.
+
+### Open issues found in the M2 review (2026-08-02)
+
+Fixed already:
+
+- **Missed migration.** M2 corrected the `entitlements.unlockedSpeciesIds` default from the dead
+  literal `'starter'` to `STARTER_SPECIES_ID` but left `SCHEMA_VERSION` at 1. `persist` merges
+  stored state *over* initial state, so a device holding v1 state would keep the dead id forever
+  and read the starter species as locked once the shop lands (M6a). Now `SCHEMA_VERSION = 2` with
+  a real 1→2 migration + tests. **Rule this proves: changing a persisted default's *meaning* needs
+  a migration just as much as changing its shape does.**
+
+Flagged for the user, deliberately not fixed unilaterally:
+
+- **A user can never get a second fish, so merging is unreachable.** `applySessionReward` spawns
+  only when the collection is empty and otherwise grows the single existing fish, which caps at
+  `GROWTH.xpPerStage` (120 XP ≈ five 25-min sessions) and then does nothing. But
+  `GROWTH.fishPerMerge` is 3, and merging is MVP feature 4 and the only way to cross a stage.
+  M3 has to pick a spawn cadence — a new fish every session? one per capped fish? every N
+  sessions? — and that is a game-feel/economy decision, not a code fix.
+- **A completed session is lost if the app is force-quit before it is reopened.** The timer store
+  is transient by design (M1), so a session that ends while backgrounded only becomes `completed`
+  — and only awards — when the app next comes to the foreground. Force-quitting instead loses the
+  reward silently. Fixing it means persisting the in-flight session, which interacts with the M4
+  accountability rules; worth deciding alongside them rather than in isolation.
+- **The tank's frame loop runs whenever `Tank` is mounted, including while another tab is
+  focused.** Expo Router keeps tab screens mounted, so the aquarium animates (and draws battery)
+  while the user is on Focus. The fix is to gate `setActive` on navigation focus, but whether it
+  resumes cleanly is exactly the kind of thing that needs a device — a good M5 polish item.
+- `awardSessionCompletion` updates `fish` only; `stats` (`totalFocusMs`, `completedSessions`,
+  `focusMsByDate`, streaks) is still all zeros. That is on-plan — stats land in M4/M5 — but the
+  Stats screen will read empty until then.
 - `explore/3d-aquarium` — a parallel spike, deliberately **not merged and with no PR open**.
   See "3D exploration" below.
 

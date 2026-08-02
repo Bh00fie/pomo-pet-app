@@ -87,14 +87,60 @@ that the time is right on return and that the notification actually fires.
 > **M2 below is unchanged.** Revisit the 3D option at the M6a decision gate.
 > Browsable version: https://claude.ai/code/artifact/50773e34-7db6-46ac-b803-6a5fb4dffe93
 
-## M2 — Pet/zoo core + tank rendering
+## M2 — Pet/zoo core + tank rendering  [~] built and unit-tested, awaiting the on-device demo
 
-- [ ] Data model: `Species`, `Stage`, `Fish { id, speciesId, stage, xp, bornAt, health }`
-- [ ] Shared animation primitives first: single tank clock, particle burst, ripple/glow, motion
-      tokens, reduce-motion hook (these get reused by every later animation)
-- [ ] Procedural fish renderer (Skia) — body/tail/fin params, idle swim loop
-- [ ] Session-complete → reward logic (XP/fish spawn)
+- [x] Data model: `Species`, `Stage`, `Fish { id, speciesId, stage, xp, bornAt, health }` —
+      `src/features/pet/model.ts`, pure TypeScript (no React/RN/Skia imports, same discipline as
+      the timer machine). One starter species, Coral Tetra, with Fry/Juvenile/Elder parameter
+      sets. `src/store/types.ts` re-exports `Fish` from here rather than keeping a second copy,
+      so the persisted shape and the domain model cannot drift
+- [x] Shared animation primitives first: single tank clock (`src/anim/useAquariumClock.ts`, one
+      `useFrameCallback` per tank — per-fish work is threaded through its `onFrame`, never a
+      driver per fish), particle burst, ripple/glow, motion tokens, reduce-motion hook.
+      `Ripple`/`ParticleBurst` are built and exported but deliberately not wired into a screen
+      yet — their consumers are the M3 merge sequence and the M4 penalty
+- [~] Procedural fish renderer (Skia) — body/tail/dorsal/pectoral built from parametric paths
+      (`src/features/pet/geometry.ts`, pure and unit-tested; growth stages are parameter sets
+      through one builder, never separate assets), wander-toward-target steering as Reanimated
+      worklets, all animated values reaching Skia through `useDerivedValue`. **Whether it
+      actually looks like a fish swimming, and holds 60fps with several fish, is phone-only** —
+      nothing here can verify it, so this stays `[~]`
+- [x] Session-complete → reward logic (XP/fish spawn) — `src/features/pet/reward.ts` (pure) plus
+      `useSessionReward`, mounted once at the app root so a session that finishes while the user
+      is on another tab still awards. Awards once per distinct `endsAt`; break sessions award
+      nothing
 - [ ] Demo: complete a session, a fish appears and swims; force-quit and reopen, it's still there
+
+Verified on 2026-08-02 by an independent review pass, machine-checkable parts only:
+
+- `npm test` → **114 tests, 11 suites, all passing** (107 after the M2 build commit, plus 7
+  migration tests added by the review pass)
+  - `model.test.ts`, `reward.test.ts`, `geometry.test.ts`, `color.test.ts` — the pure domain:
+    XP clamping at the stage cap, spawn-vs-grow selection, geometry scaling across stages
+  - `useAppStore.test.ts` — the store wiring actually spawns/grows through `applySessionReward`
+  - `migrations.test.ts` — the v1→v2 entitlements migration described below
+- `npx tsc --noEmit` → clean
+- `npx expo-doctor` → 18/18 checks passed
+- `npx expo export --platform ios` → succeeds; Hermes bundle **4.67 MB** (4.02 MB at M1)
+
+Reviewed and confirmed: one shared clock (only one `useFrameCallback` in the codebase), no
+`useState` anywhere in a per-frame path (`Tank.tsx`'s only `useState` is the `onLayout` tank
+size), fish steering state held in Reanimated mutables outside React, and `useSessionReward`
+mounted exactly once so it cannot double-award.
+
+Fixed by the review pass: M2 corrected the `entitlements.unlockedSpeciesIds` **default** from the
+dead literal `'starter'` to the real starter species id but left `SCHEMA_VERSION` at 1. Because
+`persist` merges stored state over the initial state, any device that had already written v1
+state would have kept the dead id forever. `SCHEMA_VERSION` is now 2 with a real 1→2 migration.
+
+The remaining gate needs your phone: finish a session, watch a fish appear and swim in the
+Aquarium tab, then force-quit and reopen to confirm it is still there.
+
+> **Open question for M3 — how does a user ever get a *second* fish?** Today a session spawns a
+> fish only when the collection is empty, and otherwise grows the existing one; `fishPerMerge` is
+> 3, so the merge mechanic (MVP feature 4) is currently unreachable. M3 has to decide the spawn
+> cadence — every session, every capped fish, every N sessions — and that is a game-feel call,
+> not a code fix. See CLAUDE.md.
 
 ## M3 — Growth + merge
 
