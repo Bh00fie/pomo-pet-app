@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useFrameCallback, useSharedValue, type SharedValue } from 'react-native-reanimated';
 
+import { AQUARIUM } from '@/config';
 import { useReduceMotion } from './useReduceMotion';
 
 export interface AquariumClock {
@@ -11,7 +12,9 @@ export interface AquariumClock {
 
 export type AquariumFrameCallback = (dtSeconds: number) => void;
 
-const MAX_FRAME_DT_SECONDS = 0.05;
+/** From config, not a second copy of the number — `AQUARIUM.wander.maxFrameDtMs` is the single
+ *  source of truth for the frame-delta clamp and was otherwise going unread. */
+const MAX_FRAME_DT_SECONDS = AQUARIUM.wander.maxFrameDtMs / 1000;
 
 /**
  * The tank's single animation driver (docs/PLAN.md M2). Call this once per mounted tank, not
