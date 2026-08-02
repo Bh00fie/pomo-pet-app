@@ -16,6 +16,27 @@ export const TIMER = {
   sessionsBeforeLongBreak: 4,
   minMinutes: 5,
   maxMinutes: 90,
+  /** Increment used by the +/- length controls on the Focus screen. */
+  stepMinutes: 5,
+  /**
+   * UI refresh cadence while running. The clock is *derived* from `endsAt` on every tick, so
+   * this only controls smoothness — never accuracy. Sub-second so the seconds digit never
+   * visibly lags by a full beat.
+   */
+  tickIntervalMs: 250,
+} as const;
+
+export const NOTIFICATIONS = {
+  /** Attached to scheduled notifications so ours can be told apart from anything else's. */
+  sessionEndCategory: 'session-end',
+  focus: {
+    title: 'Focus session complete',
+    body: 'Nice work. Your fish grew — take a break.',
+  },
+  break: {
+    title: 'Break over',
+    body: 'Ready for another session?',
+  },
 } as const;
 
 export const ACCOUNTABILITY = {
