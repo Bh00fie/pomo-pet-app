@@ -6,18 +6,21 @@ the hit — that accountability loop (in the spirit of apps like Forest) is the 
 
 ## Status
 
-🏗 **M2 built — the timer works and it earns you a fish.** Start/pause/resume/reset run off an
-absolute-timestamp state machine (`endsAt`, never a decrementing counter), with customizable
-work/break lengths and a local notification scheduled for the end of the session. Finishing a
-focus session now hatches or grows a fish, drawn procedurally in Skia — body, tail and fins are
-parametric paths, so the three growth stages are parameter sets rather than separate assets — and
-the whole tank animates off a single shared frame clock. See [`docs/PLAN.md`](docs/PLAN.md) for
-the milestone sequence and what's actually verified.
+🏗 **M3 built — the core loop is closed: focus, earn a fish, grow it, merge it.** Start/pause/
+resume/reset run off an absolute-timestamp state machine (`endsAt`, never a decrementing counter),
+with customizable work/break lengths and a local notification scheduled for the end of the
+session. Finishing a focus session grows a fish, drawn procedurally in Skia — body, tail and fins
+are parametric paths, so the three growth stages are parameter sets rather than separate assets —
+and the whole tank animates off a single shared frame clock. Once every fish is capped, the next
+session hatches a new one; tap three of the same stage and merge them into one of the next stage,
+with a converge → burst → spring-reveal sequence. See [`docs/PLAN.md`](docs/PLAN.md) for the
+milestone sequence and what's actually verified.
 
 Open items all need a real iPhone: the M0 gate (the project opens in App Store Expo Go), the M1
-gate (the end-of-session notification genuinely fires) and the M2 gate (the tank looks right and
-stays smooth with several fish). Everything machine-checkable — 114 unit tests, type-check,
-`expo-doctor`, iOS bundle export — passes.
+gate (the end-of-session notification genuinely fires), the M2 gate (the tank looks right and
+stays smooth with several fish) and the M3 gate (the merge sequence reads as satisfying).
+Everything machine-checkable — 135 unit tests, type-check, `expo-doctor`, iOS bundle export —
+passes.
 
 ## Running it
 

@@ -1,11 +1,12 @@
 # Project Context
 
-## Status: M2 (pet/zoo core + tank rendering) built — M3 is next
+## Status: M3 (growth + merge) built — M4 is next
 
 The Expo app exists on `main`, builds, has a working Pomodoro timer, and completed focus sessions
-now hatch/grow a procedurally drawn Skia fish that swims in the Aquarium tab. `docs/PLAN.md` is the
-milestone sequence; M3 (growth + merge) is the next thing to write — but read the open question
-about spawn cadence below first, it blocks the merge mechanic.
+hatch/grow procedurally drawn Skia fish that swim in the Aquarium tab. As of M3 the full core loop
+is closed: sessions grow fish, capped fish accumulate, and three same-stage fish can be tapped and
+merged into one of the next stage with a converge/burst/reveal sequence. `docs/PLAN.md` is the
+milestone sequence; M4 (accountability + streaks) is next.
 
 ### Current repo state (2026-08-02)
 
@@ -41,28 +42,67 @@ about spawn cadence below first, it blocks the merge mechanic.
     Multiply a `withTiming` duration — or a per-frame delta — by it. Never write
     `if (useReduceMotion())`: 0.35 is truthy and the check silently inverts.
   - Motion tokens (`src/anim/motion.ts`) are the only source of durations/easings/springs.
-    `Ripple` and `ParticleBurst` are built and exported but not wired to a screen yet — they are
-    for the M3 merge sequence and the M4 penalty.
+    `Ripple` and `ParticleBurst` are now wired into the M3 merge reveal (`MergeSequence.tsx`);
+    `springs.penalty` is still waiting on M4.
+- **Growth + merge (M3) is real.** Two rules, both pure, both in `src/features/pet/`:
+  - **Spawn rule (`reward.ts`) — the user picked this one, do not change it without asking.** A
+    completed session grows the *first* fish that still has room in its stage; a fresh Fry hatches
+    **only** when the collection is empty or every fish is already capped. The two alternatives
+    considered and rejected were "spawn every session" and "spawn every N sessions". Cap boundary:
+    `xp < GROWTH.xpPerStage` is growable, `xp >= xpPerStage` is capped, `addXp` clamps to exactly
+    the cap — consistent with `isReadyToMerge`, no off-by-one.
+  - **Merge rule (`merge.ts`).** `evaluateMerge` combines `GROWTH.fishPerMerge` same-stage,
+    same-species fish into one of the next stage at 0 XP. It never mutates and never throws:
+    every bad selection returns a typed reason (`wrong-count`, `fish-not-found`, `mixed-stages`,
+    `mixed-species`, `top-stage`). Elder merges are rejected, not crashed. It returns the *whole*
+    next collection, so `useAppStore.mergeFish` can apply it in a single `set` — one read of
+    state, one write, and no write at all on rejection. That is what makes it atomic; keep it.
+  - **Same-species is a deliberate defensive default, not a spec requirement.** `docs/MVP.md`
+    feature 4 only says "N same-stage fish". Species is added because the merge output has to
+    carry exactly one `speciesId` and there is no defined answer for which one when the inputs
+    differ — rejecting beats inventing a rule. Unobservable today (one species). **Revisit at
+    M6a**, when the shop ships more species and cross-species merging becomes a real product
+    question.
+  - UI: `Tank.tsx` owns tap-selection (`FishTapTarget` overlays that track each fish's live
+    Reanimated position, so selection costs no re-renders) and exposes `mergeSelected` via ref;
+    `AquariumScreen.tsx` renders the count/stage readout, Clear, and a Merge button enabled only
+    for a complete valid selection. **The store mutation runs synchronously before any
+    animation** — `MergeSequence` is purely a visual echo of something already persisted, so a
+    kill mid-sequence loses nothing. Under Reduce Motion the sequence is skipped entirely (the
+    result fish is simply already at the merge point), rather than hidden and then revealed.
 - `useSessionReward` is mounted **once**, at `app/_layout.tsx`, so a session finishing on any tab
   awards. It de-dupes on the timer's `endsAt` (stable per session) via a hook-local ref — that
   guard is per hook instance, so **do not mount it a second time** or every session awards twice.
-- **Tests exist and must stay green**: `npm test` (jest-expo preset), 114 tests across 11 suites.
+- **Tests exist and must stay green**: `npm test` (jest-expo preset), 135 tests across 12 suites.
   Note `@testing-library/react-native` v14 has an *async* API — `render` and `fireEvent` must both
   be awaited. Worklet/`SharedValue` code (`steering.ts`) is deliberately untested — there is
   nothing meaningful to assert without a native runtime; the plain-number math it composes with
   (`geometry.ts`) is tested instead.
-- Verified independently on 2026-08-02 after the M2 build: `npm test` 114/114, `npx tsc --noEmit`
-  clean, `npx expo-doctor` 18/18, `npx expo export --platform ios` succeeds (4.67 MB Hermes
-  bundle, 4.02 MB at M1), `expo --version` → 54.x.
+- Verified independently on 2026-08-02 after the M3 build: `npm test` 135/135 (12 suites),
+  `npx tsc --noEmit` clean, `npx expo-doctor` 18/18, `npx expo export --platform ios` succeeds
+  (4.69 MB Hermes bundle; 4.67 MB at M2, 4.02 MB at M1), `expo --version` → 54.x.
 - **Not verified**: anything needing the user's phone — that the app opens in App Store Expo Go
-  (the M0 gate), that the scheduled end-of-session notification actually fires (the M1 gate), and
-  that the tank *looks* right and holds 60fps with several fish (the M2 gate). Do not mark any of
-  them done until they confirm.
+  (the M0 gate), that the scheduled end-of-session notification actually fires (the M1 gate),
+  that the tank *looks* right and holds 60fps with several fish (the M2 gate), and that the merge
+  converge/burst/reveal sequence reads as satisfying (the M3 gate). Do not mark any of them done
+  until they confirm.
 
-### Open issues found in the M2 review (2026-08-02)
+### Open issues found in the M2/M3 reviews (2026-08-02)
 
 Fixed already:
 
+- **Three teardown/timing edge cases in the M3 merge reveal** (M3 review). `MergeSequence`
+  unmounting before its completion timer fired never ran `onComplete`, stranding the merge result
+  frozen at scale 0 — invisible, with tap-selection locked out, until an app restart; `onComplete`
+  now also runs from the effect cleanup, guarded so it fires exactly once. Reduce Motion hid the
+  new fish (`revealScaleSV = 0`) and only restored it a frame later in an effect, so the payoff
+  was a flash of nothing; `Tank` now skips the freeze/hide/sequence entirely when motion is
+  reduced. And a same-tick double tap on Merge could surface a bogus "fish could not be found"
+  alert (it could never double-merge — the store's `get()` re-read already prevented that) — a
+  synchronous in-flight ref closes it. Tap-selection also groups by species now, so the UI cannot
+  build a selection `evaluateMerge` will reject. **Rule this proves: React state is not a lock.**
+  `pendingMerge` only reflects a merge one render later; anything guarding a synchronous action
+  needs a ref.
 - **Missed migration.** M2 corrected the `entitlements.unlockedSpeciesIds` default from the dead
   literal `'starter'` to `STARTER_SPECIES_ID` but left `SCHEMA_VERSION` at 1. `persist` merges
   stored state *over* initial state, so a device holding v1 state would keep the dead id forever
@@ -72,12 +112,22 @@ Fixed already:
 
 Flagged for the user, deliberately not fixed unilaterally:
 
-- **A user can never get a second fish, so merging is unreachable.** `applySessionReward` spawns
-  only when the collection is empty and otherwise grows the single existing fish, which caps at
-  `GROWTH.xpPerStage` (120 XP ≈ five 25-min sessions) and then does nothing. But
-  `GROWTH.fishPerMerge` is 3, and merging is MVP feature 4 and the only way to cross a stage.
-  M3 has to pick a spawn cadence — a new fish every session? one per capped fish? every N
-  sessions? — and that is a game-feel/economy decision, not a code fix.
+- ~~**A user can never get a second fish, so merging is unreachable.**~~ **Resolved at M3** — you
+  chose "grow any under-cap fish; spawn a new Fry only once every fish is capped", over "spawn
+  every session" and "spawn every N sessions". Implemented and verified in `reward.ts`.
+- **Overflow XP is silently discarded at the stage cap** (new, M3). `addXp` clamps, so a fish at
+  110/120 completing a 25-minute session lands on 120 and the remaining 15 XP evaporates — the
+  new Fry only starts accruing on the *next* session. The chosen spawn rule is implemented
+  faithfully; this is the leftover economy question it exposes. Options: carry the remainder into
+  the freshly hatched Fry, bank it, or keep discarding it as a deliberate soft cap on how fast a
+  collection grows. Costs of the current behaviour are small (up to one session's XP per stage
+  fill) but it does mean the longest sessions are the most wasteful. **Game-economy call, not a
+  code fix — worth deciding alongside the M4 penalty rules, which also touch in-progress XP.**
+- **Reaching Elder takes 45 completed sessions.** Falls straight out of the numbers you picked
+  rather than being a bug: `xpPerStage` 120 ÷ `xpPerFocusMinute` 1 = 120 min ≈ five 25-min
+  sessions to cap one fish, × `fishPerMerge` 3 = 15 sessions per Juvenile, × 3 = 45 per Elder.
+  Flagging it only so the pacing is a decision rather than an accident — all three knobs are in
+  `GROWTH` (`src/config/index.ts`) and changing them needs no code change.
 - **A completed session is lost if the app is force-quit before it is reopened.** The timer store
   is transient by design (M1), so a session that ends while backgrounded only becomes `completed`
   — and only awards — when the app next comes to the foreground. Force-quitting instead loses the

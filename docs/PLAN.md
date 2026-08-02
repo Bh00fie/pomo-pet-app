@@ -136,18 +136,69 @@ state would have kept the dead id forever. `SCHEMA_VERSION` is now 2 with a real
 The remaining gate needs your phone: finish a session, watch a fish appear and swim in the
 Aquarium tab, then force-quit and reopen to confirm it is still there.
 
-> **Open question for M3 — how does a user ever get a *second* fish?** Today a session spawns a
-> fish only when the collection is empty, and otherwise grows the existing one; `fishPerMerge` is
-> 3, so the merge mechanic (MVP feature 4) is currently unreachable. M3 has to decide the spawn
-> cadence — every session, every capped fish, every N sessions — and that is a game-feel call,
-> not a code fix. See CLAUDE.md.
+> **Open question for M3 — how does a user ever get a *second* fish?** *(Answered at M3: the
+> spawn rule is "grow any under-cap fish; spawn a new Fry only once every fish is capped".)*
+> Today a session spawns a fish only when the collection is empty, and otherwise grows the
+> existing one; `fishPerMerge` is 3, so the merge mechanic (MVP feature 4) is currently
+> unreachable. M3 has to decide the spawn cadence — every session, every capped fish, every N
+> sessions — and that is a game-feel call, not a code fix. See CLAUDE.md.
 
-## M3 — Growth + merge
+## M3 — Growth + merge  [~] built and unit-tested, awaiting the on-device demo
 
-- [ ] Sessions grow a fish's XP *within* its current stage; merging N same-stage fish is the only
-      way to *cross* a stage boundary (resolves the growth-vs-merge scope ambiguity from `MVP.md`)
-- [ ] Merge selection, gather/converge/burst/reveal animation sequence
+- [x] Sessions grow a fish's XP *within* its current stage; merging N same-stage fish is the only
+      way to *cross* a stage boundary (resolves the growth-vs-merge scope ambiguity from `MVP.md`).
+      `applySessionReward` (`src/features/pet/reward.ts`) implements the spawn rule you chose:
+      grow the first fish that still has room in its stage, and hatch a fresh Fry **only** when
+      every existing fish is capped. `evaluateMerge` (`src/features/pet/merge.ts`) is the pure
+      merge rule — same discipline as the timer machine, no React/RN/Skia imports — returning a
+      typed rejection (`wrong-count` / `fish-not-found` / `mixed-stages` / `mixed-species` /
+      `top-stage`) instead of throwing or silently no-op-ing. `useAppStore.mergeFish` applies it
+      atomically: one read of state, one `set`, and no `set` at all on rejection
+- [~] Merge selection, gather/converge/burst/reveal animation sequence — tap-to-select
+      (`FishTapTarget.tsx`, an overlay tracking each fish's live position), a Merge button
+      enabled only for a complete same-stage/same-species selection, and `MergeSequence.tsx`
+      (converge → `Ripple` + `ParticleBurst` → `springs.celebrate` spring pop-in → settle into
+      normal wander steering). The store mutation happens *before* the animation, so the merge is
+      durable even if the app dies mid-sequence. **Whether the sequence reads as a satisfying
+      merge is phone-only**, so this stays `[~]`
 - [ ] Demo: earn several fish, merge them, watch the full sequence
+
+Verified on 2026-08-02 by an independent review pass, machine-checkable parts only:
+
+- `npm test` → **135 tests, 12 suites, all passing** (114 at M2)
+  - `merge.test.ts` (14) — all five rejection reasons exercised with real assertions, not just
+    existence checks: short/long selections, duplicate ids collapsing below the count, an id not
+    in the collection, mixed stages, mixed species, and three Elders. Plus both happy paths
+    (Fry→Juvenile, Juvenile→Elder), bystander preservation, and input non-mutation
+  - `reward.test.ts` — the new spawn rule: an under-cap fish is preferred over one waiting on a
+    merge, and a fresh Fry is hatched only once every fish is capped
+  - `useAppStore.test.ts` — `mergeFish` end to end, including that a rejected merge leaves the
+    collection byte-identical
+- `npx tsc --noEmit` → clean
+- `npx expo-doctor` → 18/18 checks passed
+- `npx expo export --platform ios` → succeeds; Hermes bundle **4.69 MB** (4.67 MB at M2)
+
+Reviewed and confirmed: the implemented spawn rule is the one you picked (grow-until-capped, then
+spawn) and not one of the two alternatives; the cap boundary is consistent everywhere (`xp < cap`
+is growable, `xp >= cap` is capped, `addXp` clamps to exactly the cap, so there is no off-by-one);
+`evaluateMerge` imports only `@/config` and `./model`; and `mergeFish` is genuinely atomic —
+`get()` and `set()` are synchronous with no `await` between them, so nothing can interleave, and a
+rapid double-tap cannot double-merge because the second call's ids are already gone from `get()`.
+
+Fixed by the review pass (see the commit "Harden the M3 merge sequence…"): `MergeSequence`
+unmounting before its completion timer left the merge result frozen at scale 0 — invisible and
+selection-locked until an app restart; Reduce Motion hid the new fish for a frame before restoring
+it, so the payoff was a flash of nothing; and a same-tick double tap could raise a bogus
+"fish could not be found" alert. Tap-selection now also groups by species, so the UI can never
+build a selection the domain rule will reject.
+
+The remaining gate needs your phone: earn enough fish to fill a merge, tap three of them, and
+watch the converge/burst/reveal sequence land.
+
+> **Open question carried into M4 — overflow XP is discarded at the stage cap.** A fish at
+> 110/120 that completes a 25-minute session lands on 120 and the other 15 XP evaporates; the
+> new Fry only starts on the *next* session. Carrying the remainder into the new Fry (or banking
+> it) is a game-economy call, not a code fix. See CLAUDE.md.
 
 ## M4 — Accountability + streaks
 
