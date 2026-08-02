@@ -1,5 +1,5 @@
 import { GROWTH } from '@/config';
-import { createFish, STARTER_SPECIES_ID, type Fish } from '../model';
+import { createFish, GOLDEN_KOI_SPECIES_ID, STARTER_SPECIES_ID, type Fish } from '../model';
 import { evaluateMerge, isMergeEligibleStage } from '../merge';
 
 function fry(id: string, speciesId: string = STARTER_SPECIES_ID): Fish {
@@ -48,6 +48,29 @@ describe('evaluateMerge', () => {
     const fish = [fry('a'), fry('b'), fry('c', 'some-other-species')];
     const result = evaluateMerge({ fish, selectedIds: ['a', 'b', 'c'], now: 0, idFactory });
     expect(result).toEqual({ ok: false, reason: 'mixed-species' });
+  });
+
+  it('rejects merging a real shop species with the starter (docs/PLAN.md M6a — multi-species now observable)', () => {
+    // Same rule as above, but exercised with two species that actually ship (M3's note that this
+    // was "unobservable today (one species)" no longer holds as of the M6a shop). A Golden Koi
+    // collection must not merge with Coral Tetras — the restriction is unchanged, just no longer
+    // hypothetical.
+    const fish = [fry('a'), fry('b'), fry('c', GOLDEN_KOI_SPECIES_ID)];
+    const result = evaluateMerge({ fish, selectedIds: ['a', 'b', 'c'], now: 0, idFactory });
+    expect(result).toEqual({ ok: false, reason: 'mixed-species' });
+  });
+
+  it('still merges three same-species Golden Koi normally — the restriction is per-species, not starter-only', () => {
+    const fish = [
+      fry('a', GOLDEN_KOI_SPECIES_ID),
+      fry('b', GOLDEN_KOI_SPECIES_ID),
+      fry('c', GOLDEN_KOI_SPECIES_ID),
+    ];
+    const result = evaluateMerge({ fish, selectedIds: ['a', 'b', 'c'], now: 0, idFactory });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.newFish.speciesId).toBe(GOLDEN_KOI_SPECIES_ID);
+    expect(result.newFish.stage).toBe('juvenile');
   });
 
   it('rejects merging three Elder fish — there is no stage above Elder', () => {

@@ -69,6 +69,21 @@ export const HEALTH = {
   sickTailWagMultiplier: 0.4,
 } as const;
 
+export const SHOP = {
+  /**
+   * USD prices for species sold in the shop (docs/PLAN.md M6a), keyed by species id
+   * (`src/features/pet/model.ts`). Kept here rather than on the `Species` record itself, per
+   * this file's "no magic numbers in components" rule and to sit alongside every other tunable.
+   * The starter species is always unlocked and deliberately has no entry — `model.test.ts` pins
+   * that every *other* id in `SPECIES` has one here, so a species can never ship unsellable by
+   * omission.
+   */
+  speciesPriceUsd: {
+    'golden-koi': 1.99,
+    'indigo-betta': 2.99,
+  } as Record<string, number>,
+} as const;
+
 export const STAGES = ['fry', 'juvenile', 'elder'] as const;
 export type StageId = (typeof STAGES)[number];
 

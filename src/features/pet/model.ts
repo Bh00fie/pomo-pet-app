@@ -45,8 +45,15 @@ export interface Species {
   stageParams: Record<StageId, StageVisualParams>;
 }
 
-/** The one species available for M2 — more arrive via the shop at M6a. */
+/** The starter species — always unlocked, never sold (docs/PLAN.md M2, M6a). */
 export const STARTER_SPECIES_ID: SpeciesId = 'coral-tetra';
+/** Sold in the shop (docs/PLAN.md M6a). Warm gold/orange, same silhouette family as the starter
+ *  (a gentler, rounder body) so the two visibly belong to the same procedural system. */
+export const GOLDEN_KOI_SPECIES_ID: SpeciesId = 'golden-koi';
+/** Sold in the shop (docs/PLAN.md M6a). Deep indigo/blue — the coldest hue in the catalog, paired
+ *  with betta-style flowing fins (larger `tailSpan`/`finScale` than either other species) so it
+ *  reads as a distinct shape, not just a recolor. */
+export const INDIGO_BETTA_SPECIES_ID: SpeciesId = 'indigo-betta';
 
 const STARTER_SPECIES: Species = {
   id: STARTER_SPECIES_ID,
@@ -61,8 +68,47 @@ const STARTER_SPECIES: Species = {
   },
 };
 
+const GOLDEN_KOI_SPECIES: Species = {
+  id: GOLDEN_KOI_SPECIES_ID,
+  name: 'Golden Koi',
+  hue: 40,
+  saturation: 82,
+  lightness: 58,
+  stageParams: {
+    fry: { bodyLength: 32, bodyHeight: 20, tailSpan: 0.8, finScale: 0.76 },
+    juvenile: { bodyLength: 50, bodyHeight: 30, tailSpan: 1.02, finScale: 0.96 },
+    elder: { bodyLength: 70, bodyHeight: 41, tailSpan: 1.28, finScale: 1.16 },
+  },
+};
+
+const INDIGO_BETTA_SPECIES: Species = {
+  id: INDIGO_BETTA_SPECIES_ID,
+  name: 'Indigo Betta',
+  hue: 248,
+  saturation: 68,
+  lightness: 46,
+  stageParams: {
+    // Smaller body than the other two species but noticeably longer tail/fins at every stage —
+    // a betta's silhouette is defined by its flowing fins, not its body size.
+    fry: { bodyLength: 26, bodyHeight: 15, tailSpan: 0.98, finScale: 0.95 },
+    juvenile: { bodyLength: 40, bodyHeight: 22, tailSpan: 1.4, finScale: 1.3 },
+    elder: { bodyLength: 56, bodyHeight: 31, tailSpan: 1.85, finScale: 1.7 },
+  },
+};
+
+/** Display order for the shop and anywhere else the whole catalog is listed — deliberately
+ *  explicit rather than relying on object-key insertion order, so the list doesn't silently
+ *  reorder if `SPECIES` is ever restructured. */
+export const SPECIES_ORDER: readonly SpeciesId[] = [
+  STARTER_SPECIES_ID,
+  GOLDEN_KOI_SPECIES_ID,
+  INDIGO_BETTA_SPECIES_ID,
+];
+
 export const SPECIES: Readonly<Record<SpeciesId, Species>> = {
   [STARTER_SPECIES_ID]: STARTER_SPECIES,
+  [GOLDEN_KOI_SPECIES_ID]: GOLDEN_KOI_SPECIES,
+  [INDIGO_BETTA_SPECIES_ID]: INDIGO_BETTA_SPECIES,
 };
 
 /** Falls back to the starter species for an unknown id, rather than throwing — persisted fish

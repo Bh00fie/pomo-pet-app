@@ -1,6 +1,9 @@
 export {
   SPECIES,
+  SPECIES_ORDER,
   STARTER_SPECIES_ID,
+  GOLDEN_KOI_SPECIES_ID,
+  INDIGO_BETTA_SPECIES_ID,
   getSpecies,
   createFish,
   stageIndex,

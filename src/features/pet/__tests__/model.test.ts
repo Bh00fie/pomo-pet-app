@@ -1,12 +1,15 @@
-import { GROWTH, STAGES } from '@/config';
+import { GROWTH, SHOP, STAGES } from '@/config';
 import {
   addXp,
   createFish,
   getSpecies,
+  GOLDEN_KOI_SPECIES_ID,
+  INDIGO_BETTA_SPECIES_ID,
   isMaxStage,
   isReadyToMerge,
   nextStage,
   SPECIES,
+  SPECIES_ORDER,
   stageIndex,
   stageProgress,
   STARTER_SPECIES_ID,
@@ -41,6 +44,71 @@ describe('getSpecies', () => {
     for (const stage of STAGES) {
       expect(species.stageParams[stage]).toBeDefined();
       expect(species.stageParams[stage].bodyLength).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('SPECIES catalog (docs/PLAN.md M6a — shop sells species)', () => {
+  it('has three species: the starter plus two shop species', () => {
+    expect(Object.keys(SPECIES).sort()).toEqual(
+      [STARTER_SPECIES_ID, GOLDEN_KOI_SPECIES_ID, INDIGO_BETTA_SPECIES_ID].sort(),
+    );
+  });
+
+  it('SPECIES_ORDER lists every species in SPECIES, starter first, with no extras', () => {
+    expect(SPECIES_ORDER[0]).toBe(STARTER_SPECIES_ID);
+    expect(SPECIES_ORDER.slice().sort()).toEqual(Object.keys(SPECIES).sort());
+  });
+
+  it('every species defines visual params for every stage, with a positive body size', () => {
+    for (const id of SPECIES_ORDER) {
+      const species = getSpecies(id);
+      for (const stage of STAGES) {
+        const params = species.stageParams[stage];
+        expect(params).toBeDefined();
+        expect(params.bodyLength).toBeGreaterThan(0);
+        expect(params.bodyHeight).toBeGreaterThan(0);
+        expect(params.tailSpan).toBeGreaterThan(0);
+        expect(params.finScale).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('every non-starter species has a shop price, and the starter has none', () => {
+    for (const id of SPECIES_ORDER) {
+      if (id === STARTER_SPECIES_ID) {
+        expect(SHOP.speciesPriceUsd[id]).toBeUndefined();
+      } else {
+        expect(SHOP.speciesPriceUsd[id]).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('every species has a distinct hue, so the shop and tank never show two look-alikes', () => {
+    const hues = SPECIES_ORDER.map((id) => getSpecies(id).hue);
+    expect(new Set(hues).size).toBe(hues.length);
+  });
+
+  it('Golden Koi reads as warm gold/orange, distinct from the starter’s coral hue', () => {
+    const koi = getSpecies(GOLDEN_KOI_SPECIES_ID);
+    expect(koi.name).toBe('Golden Koi');
+    expect(koi.hue).toBeGreaterThanOrEqual(25);
+    expect(koi.hue).toBeLessThanOrEqual(55);
+  });
+
+  it('Indigo Betta reads as a cold indigo/blue hue, and has larger fins than either other species', () => {
+    const betta = getSpecies(INDIGO_BETTA_SPECIES_ID);
+    expect(betta.name).toBe('Indigo Betta');
+    expect(betta.hue).toBeGreaterThanOrEqual(200);
+    expect(betta.hue).toBeLessThanOrEqual(280);
+
+    for (const stage of STAGES) {
+      expect(betta.stageParams[stage].finScale).toBeGreaterThan(
+        getSpecies(STARTER_SPECIES_ID).stageParams[stage].finScale,
+      );
+      expect(betta.stageParams[stage].finScale).toBeGreaterThan(
+        getSpecies(GOLDEN_KOI_SPECIES_ID).stageParams[stage].finScale,
+      );
     }
   });
 });
