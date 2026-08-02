@@ -1,7 +1,8 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { TIMER } from '@/config';
-import { selectHydrated, selectSettings, selectStats, useAppStore } from '@/store';
+import { getSpecies } from '@/features/pet/model';
+import { classifySessionLength } from '@/features/pet/reward';
+import { selectHydrated, selectSettings, selectSpawnSpeciesId, selectStats, useAppStore } from '@/store';
 import { colors, radius, spacing } from '@/theme';
 import { Button, Card, Screen, Text } from '@/ui';
 import { isAtSessionBound, stepSessionMinutes } from './durations';
@@ -17,6 +18,10 @@ export function FocusScreen() {
   const settings = useAppStore(selectSettings);
   const setSettings = useAppStore((s) => s.setSettings);
   const stats = useAppStore(selectStats);
+  // `selectSpawnSpeciesId`, not `settings.activeSpeciesId` directly — same reasoning as the
+  // debug panel: it re-validates against ownership, so the preview can never name a species the
+  // active session would not actually hatch.
+  const activeSpeciesName = getSpecies(useAppStore(selectSpawnSpeciesId)).name;
   const timer = useTimer();
 
   const otherMode: TimerMode = timer.mode === 'focus' ? 'break' : 'focus';
@@ -93,6 +98,7 @@ export function FocusScreen() {
             minutes={settings.workMinutes}
             onChange={(workMinutes) => setSettings({ workMinutes })}
           />
+          <HatchPreview workMinutes={settings.workMinutes} activeSpeciesName={activeSpeciesName} />
           <LengthRow
             label="Break"
             minutes={settings.shortBreakMinutes}
@@ -155,6 +161,36 @@ function ModeSwitch({ mode, onChange }: { mode: TimerMode; onChange: (mode: Time
           </Pressable>
         );
       })}
+    </View>
+  );
+}
+
+/**
+ * Live pre-session hatch preview (post-XP reward rearchitecture — see CLAUDE.md), next to the
+ * Focus duration stepper so it updates the moment the user adjusts the length, exactly like the
+ * concept wireframe: the current `workMinutes` setting alone decides the stage
+ * (`classifySessionLength`), so this needs no store write of its own to stay in sync.
+ *
+ * The long-session branch deliberately never names a species — it genuinely isn't knowable until
+ * the session completes, since `pickRandomSpeciesId` draws from the whole owned pool at hatch
+ * time, not from whatever happens to be active right now.
+ */
+function HatchPreview({
+  workMinutes,
+  activeSpeciesName,
+}: {
+  workMinutes: number;
+  activeSpeciesName: string;
+}) {
+  const long = classifySessionLength(workMinutes) === 'long';
+  return (
+    <View style={styles.hatchPreview}>
+      <Text variant="label" color="textMuted">
+        YOU'LL HATCH
+      </Text>
+      <Text color="textMuted">
+        {long ? 'A Juvenile — a random species from your collection' : `A Fry — ${activeSpeciesName}`}
+      </Text>
     </View>
   );
 }
@@ -264,4 +300,12 @@ const styles = StyleSheet.create({
   },
   stepOff: { opacity: 0.35 },
   pressed: { opacity: 0.7 },
+  hatchPreview: {
+    gap: 2,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    marginVertical: spacing.xs,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
 });

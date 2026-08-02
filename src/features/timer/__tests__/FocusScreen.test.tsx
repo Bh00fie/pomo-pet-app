@@ -179,6 +179,38 @@ describe('FocusScreen', () => {
     expect(screen.getByText('20:00')).toBeTruthy();
   });
 
+  describe('hatch preview (post-XP reward rearchitecture — see CLAUDE.md)', () => {
+    it('shows a Fry of the active species below the threshold', async () => {
+      await render(<FocusScreen />);
+      expect(screen.getByText('A Fry — Coral Tetra')).toBeTruthy();
+    });
+
+    it('updates live to a Juvenile once the stepper reaches the threshold, with no named species', async () => {
+      await render(<FocusScreen />);
+
+      // 25 -> 50 in steps of 5: five presses of the focus-length stepper.
+      for (let i = 0; i < 5; i += 1) {
+        await fireEvent.press(screen.getByLabelText('Increase focus length'));
+      }
+      expect(useAppStore.getState().settings.workMinutes).toBe(50);
+
+      expect(screen.queryByText('A Fry — Coral Tetra')).toBeNull();
+      expect(screen.getByText('A Juvenile — a random species from your collection')).toBeTruthy();
+    });
+
+    it('goes back to naming the Fry species when stepped back below the threshold', async () => {
+      await render(<FocusScreen />);
+
+      for (let i = 0; i < 5; i += 1) {
+        await fireEvent.press(screen.getByLabelText('Increase focus length'));
+      }
+      await fireEvent.press(screen.getByLabelText('Decrease focus length'));
+      expect(useAppStore.getState().settings.workMinutes).toBe(45);
+
+      expect(screen.getByText('A Fry — Coral Tetra')).toBeTruthy();
+    });
+  });
+
   it('keeps the countdown correct across a background gap with no ticks', async () => {
     await render(<FocusScreen />);
     await fireEvent.press(screen.getByText('Start focus session'));
