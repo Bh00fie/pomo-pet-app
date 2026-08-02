@@ -263,5 +263,51 @@ describe('FocusScreen', () => {
       expect(useTimerStore.getState().timer.status).toBe('abandoned');
       expect(screen.getByText('SESSION ABANDONED')).toBeTruthy();
     });
+
+    it('still penalizes when the tick interval fires before the `active` event on resume', async () => {
+      // The ordering hazard behind `tick`'s `backgroundedAt` guard. `useTimer`'s interval is a
+      // second, independent path to `completed` (`if (current >= endsAt) tick(current)`), and on
+      // iOS an overdue timer callback can be delivered *before* the `AppState` `'active'`
+      // listener runs. Without the guard the session would already be `completed` by the time
+      // `resolveForeground` looked at it, and the excursion would escape the penalty — the exact
+      // hole this rule closes, reopened by a race rather than by the check order.
+      await render(<FocusScreen />);
+      await fireEvent.press(screen.getByText('Start focus session'));
+
+      await fireAppStateChange('background');
+
+      // Land the wall clock past `endsAt`, then let one interval callback through *before* the
+      // foreground event, which is what a resumed overdue timer looks like.
+      await act(async () => {
+        jest.setSystemTime(NOW + 26 * MINUTE - 250);
+      });
+      await advance(250);
+      expect(useTimerStore.getState().timer.status).toBe('running'); // suppressed, not completed
+
+      await fireAppStateChange('active');
+
+      expect(useTimerStore.getState().timer.status).toBe('abandoned');
+      expect(screen.getByText('SESSION ABANDONED')).toBeTruthy();
+    });
+
+    it('completes normally when a brief within-grace excursion happens to span `endsAt`', async () => {
+      // The other side of the same guard: a short lock-screen glance that the timer happens to
+      // finish during is still a completion, not a penalty. The fix must not overcorrect.
+      await render(<FocusScreen />);
+      await fireEvent.press(screen.getByText('Start focus session'));
+
+      await act(async () => {
+        jest.setSystemTime(NOW + 25 * MINUTE - 2_000); // 2s left
+      });
+      await fireAppStateChange('background');
+      await act(async () => {
+        jest.setSystemTime(NOW + 25 * MINUTE + 4_000); // away 6s total — inside the 8s grace
+      });
+      await fireAppStateChange('active');
+
+      expect(useTimerStore.getState().timer.status).toBe('completed');
+      expect(useTimerStore.getState().lastPenaltyToken).toBe(0);
+      expect(screen.queryByText('SESSION ABANDONED')).toBeNull();
+    });
   });
 });

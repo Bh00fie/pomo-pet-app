@@ -76,7 +76,9 @@ export function useTimer(): UseTimerResult {
     syncFromSettings();
   }, [syncFromSettings, settings.workMinutes, settings.shortBreakMinutes, timer.status, timer.mode]);
 
-  // Re-render cadence while running, plus the boundary check that completes the session.
+  // Re-render cadence while running, plus the boundary check that completes the session. Note
+  // `tick` is a no-op while a background excursion is open, so an overdue callback delivered on
+  // resume can never complete a session out from under `resolveForeground` — see the store.
   useEffect(() => {
     if (timer.status !== 'running' || timer.endsAt === null) return;
 

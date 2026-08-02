@@ -35,7 +35,8 @@ interface TimerStore {
   /**
    * Bumped exactly once each time `resolveForeground` auto-abandons a still-running session for
    * having stayed backgrounded past `ACCOUNTABILITY.backgroundGraceMs` — never for a manual
-   * "Give up", and never when the session had already legitimately finished while backgrounded.
+   * "Give up", and never for an excursion that stayed *within* the grace period. A session whose
+   * `endsAt` passed while away is **not** exempt: sustained backgrounding penalizes regardless.
    * `useLeaveEarlyPenalty` watches this (not `timer.status === 'abandoned'`, which both paths
    * produce) to know specifically when to sicken a fish.
    */
@@ -47,7 +48,10 @@ interface TimerStore {
   resume: () => void;
   reset: (options?: { mode?: TimerMode }) => void;
   abandon: () => void;
-  /** Fold the clock in; completes the session if `endsAt` has passed. */
+  /**
+   * Fold the clock in; completes the session if `endsAt` has passed. Suppressed entirely while a
+   * background excursion is open — `resolveForeground` owns that decision, see below.
+   */
   tick: (now?: number) => void;
   /** While idle, keep the shown length in step with the user's configured work/break minutes. */
   syncFromSettings: () => void;
@@ -128,7 +132,20 @@ export const useTimerStore = create<TimerStore>()((set, get) => {
     pause: () => get().dispatch({ type: 'PAUSE', now: Date.now() }),
     resume: () => get().dispatch({ type: 'RESUME', now: Date.now() }),
     abandon: () => get().dispatch({ type: 'ABANDON', now: Date.now() }),
-    tick: (now) => get().dispatch({ type: 'TICK', now: now ?? Date.now() }),
+
+    tick: (now) => {
+      // While a background excursion is open, `resolveForeground` is the *only* thing allowed to
+      // resolve the session — past the grace period it must abandon, not complete. `useTimer`'s
+      // interval is a second, independent path to `completed`, and iOS can deliver an overdue
+      // timer callback *before* the `AppState` `'active'` listener on resume; letting it through
+      // would silently reinstate the escape hatch (session already `completed`, so
+      // `resolveForeground` finds nothing running to penalize). This also matches what M1 always
+      // assumed anyway: a backgrounded session is reconciled on return, not by a JS interval that
+      // the OS has suspended. Deliberately here and not in `dispatch` — `resolveForeground`'s own
+      // within-grace TICK is dispatched *after* it clears `backgroundedAt`, so it is unaffected.
+      if (get().backgroundedAt !== null) return;
+      get().dispatch({ type: 'TICK', now: now ?? Date.now() });
+    },
 
     reset: (options) => {
       const mode = options?.mode ?? get().timer.mode;

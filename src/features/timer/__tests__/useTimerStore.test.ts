@@ -257,6 +257,32 @@ describe('noteBackgrounded / resolveForeground (docs/PLAN.md M4 leave-early pena
     expect(useTimerStore.getState().lastPenaltyToken).toBe(1);
   });
 
+  it('suppresses `tick` while a background excursion is open, so it cannot complete the session first', () => {
+    // `resolveForeground` owns the resolution of a backgrounded session. If the interval's tick
+    // could complete it first (iOS can deliver an overdue timer callback before the AppState
+    // `'active'` listener on resume), the excursion would find nothing `running` to penalize.
+    useTimerStore.getState().start();
+    useTimerStore.getState().noteBackgrounded(NOW + MINUTE);
+
+    useTimerStore.getState().tick(NOW + 26 * MINUTE); // well past endsAt, but still backgrounded
+    expect(useTimerStore.getState().timer.status).toBe('running');
+
+    useTimerStore.getState().resolveForeground(NOW + 26 * MINUTE);
+    expect(useTimerStore.getState().timer.status).toBe('abandoned');
+    expect(useTimerStore.getState().lastPenaltyToken).toBe(1);
+  });
+
+  it('leaves `tick` alone when there is no open excursion, including during a break', () => {
+    // The guard keys off `backgroundedAt`, which `noteBackgrounded` refuses to set for a break —
+    // so break sessions (and ordinary foregrounded focus sessions) still complete on the tick.
+    useTimerStore.getState().start({ mode: 'break' });
+    useTimerStore.getState().noteBackgrounded(NOW); // no-op: breaks are exempt
+    expect(useTimerStore.getState().backgroundedAt).toBeNull();
+
+    useTimerStore.getState().tick(NOW + 5 * MINUTE);
+    expect(useTimerStore.getState().timer.status).toBe('completed');
+  });
+
   it('does not double-penalize across repeated foreground events for the same excursion', () => {
     useTimerStore.getState().start();
     useTimerStore.getState().noteBackgrounded(NOW + 1_000);
