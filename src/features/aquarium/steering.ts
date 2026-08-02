@@ -31,6 +31,16 @@ export interface TankBounds {
  *  used from the JS thread (`Tank.tsx`) to seed a new fish's starting position/speed, so it is
  *  a plain function rather than worklet-only — `'worklet'`-directive functions remain callable
  *  normally, they just gain the ability to also run on the UI thread. */
+/** Cheap deterministic string hash → [0,1)-ish integer, used so a fish's steering/animation seed
+ *  is stable across re-renders/re-mounts (keyed by id, not array index — index would shift if
+ *  fish are removed). Shared by `Tank.tsx` and `MergeSequence.tsx` so a merged-away fish's ghost
+ *  gets the same phase/speed decorrelation it had while it was swimming normally. */
+export function seedFromId(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i += 1) h = (Math.imul(h, 31) + id.charCodeAt(i)) >>> 0;
+  return h % 100000;
+}
+
 export function seededRandom01(seed: number): number {
   'worklet';
   const x = Math.sin(seed * 12.9898) * 43758.5453;
