@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, type ViewStyle } from 'react-native';
 import { colors, radius, spacing } from '@/theme';
 import { Text } from './Text';
 
-type Variant = 'primary' | 'secondary' | 'ghost';
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
 interface ButtonProps {
   label: string;
@@ -34,7 +34,7 @@ export function Button({
         style,
       ]}
     >
-      <Text variant="label" color={variant === 'primary' ? 'abyss' : 'text'}>
+      <Text variant="label" color={variant === 'primary' || variant === 'danger' ? 'abyss' : 'text'}>
         {label}
       </Text>
     </Pressable>
@@ -52,6 +52,8 @@ const styles = StyleSheet.create({
   primary: { backgroundColor: colors.coral },
   secondary: { backgroundColor: colors.surfaceRaised },
   ghost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.outline },
+  /** Destructive actions only (docs/PLAN.md M5 — the Settings reset-data action). */
+  danger: { backgroundColor: colors.danger },
   pressed: { opacity: 0.75 },
   disabled: { opacity: 0.4 },
 });
