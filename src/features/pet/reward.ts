@@ -46,7 +46,7 @@ export interface SessionRewardResult {
   spawned: boolean;
 }
 
-interface DistributeResult {
+export interface DistributeXpResult {
   fish: Fish[];
   awardedFishId: string;
   spawned: boolean;
@@ -62,14 +62,20 @@ interface DistributeResult {
  * also recovers from `sick` here (docs/PLAN.md M4 recovery rule) — being chosen as the thing a
  * completed session grows is what cures it, whether or not this particular call is the one that
  * carries the overflow.
+ *
+ * Exported (not just used internally by `applySessionReward`) so the debug panel's "Grant XP"
+ * action (`useAppStore.debugGrantXp`, added post-M6a review — see CLAUDE.md "THE BIG ONE AT THE
+ * GATE") can hand it a raw XP amount directly instead of going through `xpForFocusMs`/a fake
+ * focus duration. Same selection rule, same clamping, same overflow-chain recursion — the debug
+ * action is a shortcut to this function, not a reimplementation of it.
  */
-function distributeXp(
+export function distributeXp(
   fish: Fish[],
   xp: number,
   now: number,
   idFactory: () => string,
   spawnSpeciesId: SpeciesId,
-): DistributeResult {
+): DistributeXpResult {
   const growthTarget = fish.find((f) => f.xp < GROWTH.xpPerStage);
 
   if (!growthTarget) {

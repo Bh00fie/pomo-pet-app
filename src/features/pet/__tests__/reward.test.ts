@@ -1,6 +1,6 @@
 import { GROWTH } from '@/config';
 import { addXp, createFish, GOLDEN_KOI_SPECIES_ID, STARTER_SPECIES_ID, type Fish } from '../model';
-import { applySessionReward, xpForFocusMs } from '../reward';
+import { applySessionReward, distributeXp, xpForFocusMs } from '../reward';
 
 const MS_PER_MINUTE = 60_000;
 
@@ -349,5 +349,41 @@ describe('applySessionReward — XP overflow at the stage cap (M4)', () => {
     // Nothing evaporated and nothing was conjured.
     const endingXp = result.fish.reduce((sum, f) => sum + f.xp, 0);
     expect(endingXp).toBe(startingXp + 75);
+  });
+});
+
+describe('distributeXp — exported directly for the debug panel (post-M6a review)', () => {
+  // The store's `debugGrantXp` action calls this function directly with a raw XP amount instead
+  // of routing an `xpForFocusMs`-derived value through `applySessionReward`. Pinning that
+  // `applySessionReward` is a thin wrapper around this exact function — not a second copy of the
+  // selection/overflow rule — so both callers are provably running the same logic.
+  const idFactory = () => 'new-fish';
+
+  it('produces the same result as applySessionReward for the equivalent xpForFocusMs output', () => {
+    const fish = [createFish(STARTER_SPECIES_ID, 0, 'existing')];
+    const xp = xpForFocusMs(25 * 60_000);
+
+    const viaApplySessionReward = applySessionReward({
+      fish,
+      focusMs: 25 * 60_000,
+      now: 5000,
+      idFactory,
+    });
+    const viaDistributeXp = distributeXp(fish, xp, 5000, idFactory, STARTER_SPECIES_ID);
+
+    expect(viaDistributeXp).toEqual({
+      fish: viaApplySessionReward.fish,
+      awardedFishId: viaApplySessionReward.awardedFishId,
+      spawned: viaApplySessionReward.spawned,
+    });
+  });
+
+  it('grows the current growth-target fish directly given a raw XP amount', () => {
+    const growing = createFish(STARTER_SPECIES_ID, 0, 'growing');
+    const result = distributeXp([growing], 75, 0, idFactory, STARTER_SPECIES_ID);
+
+    expect(result.fish[0].xp).toBe(75);
+    expect(result.awardedFishId).toBe('growing');
+    expect(result.spawned).toBe(false);
   });
 });

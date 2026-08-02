@@ -325,3 +325,168 @@ describe('mergeFish', () => {
     expect(useAppStore.getState().fish).toHaveLength(3);
   });
 });
+
+describe('debug actions (post-M6a review — fast-forwarding real pacing during testing)', () => {
+  describe('debugGrantXp', () => {
+    it('produces exactly the same fish state a real session completion would for that XP amount', () => {
+      // Same starting collection, one path via the real session-completion action (spending
+      // xpPerFocusMinute-denominated focus time), the other via the debug grant of the resulting
+      // XP directly — the two must land on identical fish state, proving the debug action routes
+      // through the same underlying distribution rule rather than a parallel implementation.
+      useAppStore.getState().awardSessionCompletion(25 * MINUTE, 1_700_000_000_000);
+      const viaRealSession = useAppStore.getState().fish;
+
+      useAppStore.getState().resetAll();
+      useAppStore.getState().debugGrantXp(25 * GROWTH.xpPerFocusMinute, 1_700_000_000_000);
+      const viaDebugGrant = useAppStore.getState().fish;
+
+      expect(viaDebugGrant.map((f) => ({ ...f, id: undefined }))).toEqual(
+        viaRealSession.map((f) => ({ ...f, id: undefined })),
+      );
+    });
+
+    it('grows the current active-growth-target fish, reusing reward.ts’s first-with-room selection', () => {
+      const capped = { ...createFish(STARTER_SPECIES_ID, 0, 'capped'), xp: GROWTH.xpPerStage };
+      const growing = createFish(STARTER_SPECIES_ID, 0, 'growing');
+      useAppStore.setState({ fish: [capped, growing] });
+
+      useAppStore.getState().debugGrantXp(50, 1_700_000_000_000);
+
+      const { fish } = useAppStore.getState();
+      expect(fish.find((f) => f.id === 'capped')!.xp).toBe(GROWTH.xpPerStage);
+      expect(fish.find((f) => f.id === 'growing')!.xp).toBe(50);
+    });
+
+    it('can cap a fish in one call with a large enough grant, including overflow into a new fish', () => {
+      // Same overflow-chain guarantee as the real reward path (docs/PLAN.md M4): the grant only
+      // clamps-and-discards when it *hatches* the target from scratch, so this seeds one
+      // existing under-cap fish for the grant to grow (and overflow past) rather than spawn.
+      useAppStore.setState({ fish: [createFish(STARTER_SPECIES_ID, 0, 'existing')] });
+
+      useAppStore.getState().debugGrantXp(GROWTH.xpPerStage + 30, 1_700_000_000_000);
+
+      const { fish } = useAppStore.getState();
+      expect(fish).toHaveLength(2);
+      expect(fish.find((f) => f.id === 'existing')!.xp).toBe(GROWTH.xpPerStage);
+      expect(fish.find((f) => f.id !== 'existing')!.xp).toBe(30);
+    });
+
+    it('does not touch stats or the streak — only awardSessionCompletion does that', () => {
+      useAppStore.getState().awardSessionCompletion(25 * MINUTE, 1_700_000_000_000);
+      const before = useAppStore.getState().stats;
+
+      useAppStore.getState().debugGrantXp(200, 1_700_000_100_000);
+
+      expect(useAppStore.getState().stats).toEqual(before);
+    });
+
+    it('hatches a fresh fry as the resolved active species when there is nothing to grow', () => {
+      useAppStore.getState().unlockSpecies(GOLDEN_KOI_SPECIES_ID);
+      useAppStore.getState().setActiveSpecies(GOLDEN_KOI_SPECIES_ID);
+
+      useAppStore.getState().debugGrantXp(40, 1_700_000_000_000);
+
+      expect(useAppStore.getState().fish[0].speciesId).toBe(GOLDEN_KOI_SPECIES_ID);
+    });
+  });
+
+  describe('debugCapAllFish', () => {
+    it('sets every existing fish to its stage’s max XP in one call', () => {
+      useAppStore.setState({
+        fish: [
+          createFish(STARTER_SPECIES_ID, 0, 'a'),
+          { ...createFish(STARTER_SPECIES_ID, 0, 'b'), xp: 40 },
+          { ...createFish(GOLDEN_KOI_SPECIES_ID, 0, 'c'), xp: GROWTH.xpPerStage },
+        ],
+      });
+
+      useAppStore.getState().debugCapAllFish();
+
+      expect(useAppStore.getState().fish.every((f) => f.xp === GROWTH.xpPerStage)).toBe(true);
+      expect(useAppStore.getState().fish).toHaveLength(3);
+    });
+
+    it('is a no-op on an empty collection', () => {
+      useAppStore.getState().debugCapAllFish();
+      expect(useAppStore.getState().fish).toEqual([]);
+    });
+
+    it('never changes fish health — capping is not a way to cure a sick fish', () => {
+      useAppStore.setState({
+        fish: [{ ...createFish(STARTER_SPECIES_ID, 0, 'sick-fish'), health: 'sick' }],
+      });
+
+      useAppStore.getState().debugCapAllFish();
+
+      expect(useAppStore.getState().fish[0].health).toBe('sick');
+      expect(useAppStore.getState().fish[0].xp).toBe(GROWTH.xpPerStage);
+    });
+
+    it('makes an immediate merge selection legal — the whole point of the action', () => {
+      useAppStore.setState({
+        fish: [
+          createFish(STARTER_SPECIES_ID, 0, 'a'),
+          createFish(STARTER_SPECIES_ID, 0, 'b'),
+          createFish(STARTER_SPECIES_ID, 0, 'c'),
+        ],
+      });
+
+      useAppStore.getState().debugCapAllFish();
+      const result = useAppStore.getState().mergeFish(['a', 'b', 'c'], 1_700_000_000_000);
+
+      expect(result.ok).toBe(true);
+      expect(useAppStore.getState().fish).toHaveLength(1);
+      expect(useAppStore.getState().fish[0].stage).toBe('juvenile');
+    });
+  });
+
+  describe('debugSpawnFish', () => {
+    it('hatches a fresh fry of the resolved active species, unconditionally', () => {
+      useAppStore.getState().unlockSpecies(GOLDEN_KOI_SPECIES_ID);
+      useAppStore.getState().setActiveSpecies(GOLDEN_KOI_SPECIES_ID);
+
+      useAppStore.getState().debugSpawnFish(1_700_000_000_000);
+
+      const { fish } = useAppStore.getState();
+      expect(fish).toHaveLength(1);
+      expect(fish[0]).toMatchObject({
+        speciesId: GOLDEN_KOI_SPECIES_ID,
+        stage: 'fry',
+        xp: 0,
+        bornAt: 1_700_000_000_000,
+        health: 'healthy',
+      });
+    });
+
+    it('defaults to the starter species when nothing else is active', () => {
+      useAppStore.getState().debugSpawnFish(1_700_000_000_000);
+      expect(useAppStore.getState().fish[0].speciesId).toBe(STARTER_SPECIES_ID);
+    });
+
+    it('spawns even when an existing fish still has room to grow — unlike the real spawn rule', () => {
+      useAppStore.setState({ fish: [createFish(STARTER_SPECIES_ID, 0, 'roomy')] });
+
+      useAppStore.getState().debugSpawnFish(1_700_000_100_000);
+
+      expect(useAppStore.getState().fish).toHaveLength(2);
+      const roomy = useAppStore.getState().fish.find((f) => f.id === 'roomy')!;
+      expect(roomy.xp).toBe(0); // untouched — the existing fish was not grown, a new one hatched
+    });
+
+    it('falls back to the starter species if activeSpeciesId names a species no longer owned', () => {
+      useAppStore.setState((s) => ({ settings: { ...s.settings, activeSpeciesId: GOLDEN_KOI_SPECIES_ID } }));
+
+      useAppStore.getState().debugSpawnFish(1_700_000_000_000);
+
+      expect(useAppStore.getState().fish[0].speciesId).toBe(STARTER_SPECIES_ID);
+    });
+
+    it('assigns each spawned fish a distinct id', () => {
+      useAppStore.getState().debugSpawnFish(1_700_000_000_000);
+      useAppStore.getState().debugSpawnFish(1_700_000_000_001);
+
+      const [a, b] = useAppStore.getState().fish;
+      expect(a.id).not.toBe(b.id);
+    });
+  });
+});

@@ -1,18 +1,30 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import { APP, TIMER } from '@/config';
+import { APP, GROWTH, TIMER } from '@/config';
 // Submodule imports (not the `@/features/pet` barrel) — the barrel re-exports `useSessionReward`,
 // which imports this store, and going through it here would create a module-load cycle.
 import { generateFishId } from '@/features/pet/id';
 import { evaluateMerge, type MergeResult } from '@/features/pet/merge';
-import { STARTER_SPECIES_ID, type SpeciesId } from '@/features/pet/model';
+import { addXp, createFish, STARTER_SPECIES_ID, type SpeciesId } from '@/features/pet/model';
 import { applyPenalty } from '@/features/pet/penalty';
-import { applySessionReward } from '@/features/pet/reward';
+import { applySessionReward, distributeXp } from '@/features/pet/reward';
 import { applyCompletedSessionToStreak, toLocalDateString } from '@/features/streak';
 import { SCHEMA_VERSION, migrate } from './migrations';
 import { asyncStorageJSON } from './storage';
 import type { PersistedState, Settings } from './types';
+
+/**
+ * The species a fresh Fry hatches as (docs/PLAN.md M6a): the user's chosen `activeSpeciesId`,
+ * re-validated against `entitlements.unlockedSpeciesIds` on every call rather than trusted as
+ * stored, falling back to the starter. Factored out of `awardSessionCompletion` so the debug
+ * panel's "Spawn fish" action reuses this exact resolution instead of a second copy of it.
+ */
+function resolveSpawnSpeciesId(s: Pick<AppStore, 'settings' | 'entitlements'>): SpeciesId {
+  return s.entitlements.unlockedSpeciesIds.includes(s.settings.activeSpeciesId)
+    ? s.settings.activeSpeciesId
+    : STARTER_SPECIES_ID;
+}
 
 interface AppActions {
   setSettings: (patch: Partial<Settings>) => void;
@@ -72,6 +84,35 @@ interface AppActions {
   setActiveSpecies: (speciesId: SpeciesId) => void;
   /** Test/dev affordance — wipes persisted state back to defaults. */
   resetAll: () => void;
+
+  // --- Debug-only actions (added post-M6a review) ---------------------------------------------
+  // TODO: remove or gate before EAS build submission. These exist only so the real pacing in
+  // `GROWTH` (untouched — see CLAUDE.md "THE BIG ONE AT THE GATE") doesn't block the user from
+  // actually reaching merge and a purchased species during on-device testing. Each one calls
+  // straight into the same pure functions the real reward/spawn flow uses
+  // (`distributeXp`/`addXp`/`createFish`) — never a parallel simulation of them.
+  /**
+   * Grants `xp` to the current active-growth-target fish via the exact same `distributeXp`
+   * selection/overflow logic `awardSessionCompletion` uses — the only difference is the XP comes
+   * from a raw number instead of `xpForFocusMs(focusMs)`. Deliberately does **not** touch stats
+   * or the streak (unlike `awardSessionCompletion`): this is a shortcut through the reward
+   * *distribution* rule, not a fake extra session.
+   */
+  debugGrantXp: (xp: number, now: number) => void;
+  /**
+   * Instantly sets every existing fish's `xp` to its stage cap via `addXp` (the same clamp the
+   * real reward path uses), so a merge becomes available without waiting through real sessions.
+   * Never touches `health` — capping a fish is not a way to cure it; that stays exclusive to
+   * being picked as a real grow target.
+   */
+  debugCapAllFish: () => void;
+  /**
+   * Hatches one fresh Fry of the resolved active species via the same `createFish` primitive
+   * `distributeXp`'s spawn branch calls, unconditionally rather than only when every fish is
+   * capped — so a just-purchased species can be seen immediately instead of waiting on the real
+   * M3 spawn rule.
+   */
+  debugSpawnFish: (now: number) => void;
 }
 
 export type AppStore = PersistedState & {
@@ -121,9 +162,7 @@ export const useAppStore = create<AppStore>()(
           // ownership on every call, not just when it's set (`setActiveSpecies` already guards
           // its own write) — a species could stop being owned by some future path this store
           // doesn't have yet (e.g. a refund), and a stale unowned id must never reach `reward.ts`.
-          const spawnSpeciesId = s.entitlements.unlockedSpeciesIds.includes(s.settings.activeSpeciesId)
-            ? s.settings.activeSpeciesId
-            : STARTER_SPECIES_ID;
+          const spawnSpeciesId = resolveSpawnSpeciesId(s);
 
           const result = applySessionReward({
             fish: s.fish,
@@ -213,6 +252,25 @@ export const useAppStore = create<AppStore>()(
       },
 
       resetAll: () => set({ ...initialPersisted }),
+
+      // --- Debug-only actions (added post-M6a review) ------------------------------------------
+      // TODO: remove or gate before EAS build submission.
+      debugGrantXp: (xp, now) =>
+        set((s) => {
+          const spawnSpeciesId = resolveSpawnSpeciesId(s);
+          const result = distributeXp(s.fish, xp, now, () => generateFishId(now), spawnSpeciesId);
+          return { fish: result.fish };
+        }),
+
+      debugCapAllFish: () =>
+        set((s) => ({ fish: s.fish.map((f) => addXp(f, GROWTH.xpPerStage)) })),
+
+      debugSpawnFish: (now) =>
+        set((s) => {
+          const spawnSpeciesId = resolveSpawnSpeciesId(s);
+          const hatched = createFish(spawnSpeciesId, now, generateFishId(now));
+          return { fish: [...s.fish, hatched] };
+        }),
     }),
     {
       name: APP.storageKey,
