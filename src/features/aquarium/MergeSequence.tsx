@@ -45,6 +45,8 @@ export interface MergeSequenceProps {
  *
  * Respects `useReduceMotion()`: when motion is reduced, this skips straight to calling
  * `onComplete` on mount and renders nothing, rather than a slowed-down version of the sequence.
+ * In practice `Tank` already declines to mount it at all under Reduce Motion (so the merge result
+ * is never hidden even for a frame) — this branch is the belt-and-braces half of that.
  */
 export function MergeSequence({
   removedFish,
@@ -60,6 +62,19 @@ export function MergeSequence({
   const [ghostsVisible, setGhostsVisible] = useState(true);
   const [burstTrigger, setBurstTrigger] = useState(0);
   const [rippleTrigger, setRippleTrigger] = useState(0);
+
+  // `onComplete` is what un-freezes the merge result and clears this component. It must run
+  // exactly once, and it must run even if the sequence is torn down early (the `Canvas`
+  // unmounting on a 0×0 relayout, say) — otherwise the tank is left permanently holding the new
+  // fish frozen at scale 0, invisible, with selection locked out until the app restarts.
+  // Callers must pass a stable `onComplete` (Tank's is a `useCallback`): the effect below runs
+  // once per mount, so it is the mount-time identity that gets called.
+  const completedRef = useRef(false);
+  const finish = () => {
+    if (completedRef.current) return;
+    completedRef.current = true;
+    onComplete();
+  };
 
   const ghostKinematicsRef = useRef<Map<string, FishKinematics> | null>(null);
   if (ghostKinematicsRef.current === null) {
@@ -79,7 +94,7 @@ export function MergeSequence({
 
   useEffect(() => {
     if (reduced) {
-      onComplete();
+      finish();
       return;
     }
 
@@ -97,13 +112,15 @@ export function MergeSequence({
       revealScale.value = withSpring(1, springs.celebrate);
     }, convergeMs);
 
-    const completeTimer = setTimeout(() => {
-      onComplete();
-    }, convergeMs + durations.scene);
+    const completeTimer = setTimeout(finish, convergeMs + durations.scene);
 
     return () => {
       clearTimeout(revealTimer);
       clearTimeout(completeTimer);
+      // Torn down before the sequence finished — hand the tank back its end state anyway rather
+      // than stranding the merge result frozen and invisible. A no-op on the normal path, where
+      // `completeTimer` has already run `finish`.
+      finish();
     };
     // Runs exactly once per mount — this component is only ever mounted for the lifetime of one
     // merge sequence (the caller keys it and unmounts it on `onComplete`).

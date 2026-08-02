@@ -3,7 +3,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { makeMutable, useDerivedValue, useSharedValue, type SharedValue } from 'react-native-reanimated';
 
-import { useAquariumClock } from '@/anim';
+import { useAquariumClock, useReduceMotion } from '@/anim';
 import { AQUARIUM, GROWTH } from '@/config';
 import { getSpecies, isMergeEligibleStage, type Fish, type MergeResult } from '@/features/pet';
 import { useAppStore } from '@/store';
@@ -70,12 +70,16 @@ export interface TankProps {
  * fish's *current* position, atomically applies the merge in the store, then plays
  * `MergeSequence` — converge → burst → spring-reveal — while the merge result's own steering is
  * frozen at the convergence point (`frozenFishIdSV`) and hidden (`revealScaleSV` at 0) until the
- * reveal, so there is never a duplicate sprite for the new fish.
+ * reveal, so there is never a duplicate sprite for the new fish. Under Reduce Motion the whole
+ * visual sequence is skipped: the merge result is simply already present at the merge point,
+ * never frozen and never hidden.
  */
 export const Tank = forwardRef<TankHandle, TankProps>(function Tank({ fish, onSelectionChange }, ref) {
   const [size, setSize] = useState<TankBounds>({ width: 0, height: 0 });
   const boundsSV = useSharedValue<TankBounds>({ width: 0, height: 0 });
   const mergeFishAction = useAppStore((s) => s.mergeFish);
+  // Duration *multiplier* (1 or REDUCED_MOTION_SCALE), never a boolean — see `useReduceMotion`.
+  const reduceMotion = useReduceMotion() !== 1;
 
   useEffect(() => {
     boundsSV.value = size;
@@ -94,6 +98,12 @@ export const Tank = forwardRef<TankHandle, TankProps>(function Tank({ fish, onSe
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [pendingMerge, setPendingMerge] = useState<PendingMergeState | null>(null);
+  // Synchronous mirror of "a merge is already underway". `pendingMerge` is React state, so it
+  // only reflects the merge one render *after* `mergeSelected` runs; two `onPress` callbacks
+  // dispatched before that render would both read it as null. The store would still refuse the
+  // second merge (its ids are gone from `get().fish` by then), so nothing can be double-merged —
+  // but the user would eat a bogus "fish could not be found" alert. This closes that window.
+  const mergeInFlightRef = useRef(false);
 
   // Only one merge can be mid-reveal at a time (the Merge button is disabled while
   // `pendingMerge` is set) — a single shared value for "which fish id is frozen/scaling" is
@@ -166,9 +176,15 @@ export const Tank = forwardRef<TankHandle, TankProps>(function Tank({ fish, onSe
       setSelectedIds((prev) => {
         if (prev.includes(target.id)) return prev.filter((id) => id !== target.id);
 
-        const currentStage = prev.length > 0 ? fish.find((f) => f.id === prev[0])?.stage : null;
-        if (currentStage && currentStage !== target.stage) return [target.id]; // stage switch replaces the selection
-        if (prev.length >= GROWTH.fishPerMerge) return prev; // already full for this stage
+        // Species is checked alongside stage so the selection the UI lets you build is always one
+        // `evaluateMerge` will accept. Moot today (one species), but once the shop ships more
+        // (M6a) a mixed-species tap would otherwise enable the Merge button and then fail with an
+        // alert — the UI rule and the domain rule have to agree, not just overlap.
+        const anchor = prev.length > 0 ? fish.find((f) => f.id === prev[0]) : undefined;
+        if (anchor && (anchor.stage !== target.stage || anchor.speciesId !== target.speciesId)) {
+          return [target.id]; // switching stage or species replaces the selection
+        }
+        if (prev.length >= GROWTH.fishPerMerge) return prev; // already full for this group
 
         return [...prev, target.id];
       });
@@ -180,7 +196,7 @@ export const Tank = forwardRef<TankHandle, TankProps>(function Tank({ fish, onSe
     ref,
     () => ({
       mergeSelected: () => {
-        if (pendingMerge) return null;
+        if (pendingMerge || mergeInFlightRef.current) return null;
         if (selectedIds.length !== GROWTH.fishPerMerge) return null;
 
         // Snapshot each selected fish's *current* position before doing anything else — this is
@@ -210,6 +226,15 @@ export const Tank = forwardRef<TankHandle, TankProps>(function Tank({ fish, onSe
         });
 
         mergeSpawnPointsRef.current.set(result.newFish.id, { x: centerX, y: centerY });
+
+        // Under Reduce Motion there is no sequence to play, so never hide the result in the
+        // first place. Freezing it (`frozenFishIdSV`) and hiding it (`revealScaleSV = 0`) here
+        // would leave the merged fish invisible until `MergeSequence`'s mount effect undid it a
+        // frame later — a flash of nothing where the payoff should be. Skipping straight to the
+        // end state means the new fish is simply already there, at the merge point.
+        if (reduceMotion) return result;
+
+        mergeInFlightRef.current = true;
         frozenFishIdSV.value = result.newFish.id;
         revealScaleSV.value = 0;
 
@@ -225,10 +250,11 @@ export const Tank = forwardRef<TankHandle, TankProps>(function Tank({ fish, onSe
       },
       clearSelection: () => setSelectedIds([]),
     }),
-    [selectedIds, fish, mergeFishAction, pendingMerge, frozenFishIdSV, revealScaleSV],
+    [selectedIds, fish, mergeFishAction, pendingMerge, reduceMotion, frozenFishIdSV, revealScaleSV],
   );
 
   const handleMergeComplete = useCallback(() => {
+    mergeInFlightRef.current = false;
     frozenFishIdSV.value = '';
     revealScaleSV.value = 1;
     setPendingMerge(null);
