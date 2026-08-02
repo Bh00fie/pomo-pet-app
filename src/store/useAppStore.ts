@@ -26,9 +26,18 @@ interface AppActions {
    * session would have grown as `sick` instead, and counts the session as abandoned in stats.
    * Called from `useLeaveEarlyPenalty` exactly when the timer engine auto-abandons a running
    * session for staying backgrounded past `ACCOUNTABILITY.backgroundGraceMs` — never for a
-   * manual "Give up", which already withholds the reward on its own.
+   * manual "Give up", which has its own counter-only action below.
    */
   penalizeAbandonedSession: (now: number) => void;
+  /**
+   * Counts a manual "Give up" as an abandoned session — the M5-review fix for a counter literally
+   * named `abandonedSessions` that used to under-report by not counting every way a session gets
+   * abandoned. Deliberately does **not** touch `fish` health: the decision that give-up stays
+   * exempt from sickening a fish (the reward is already withheld, which is its own consequence)
+   * is unchanged. Called from `useTimerStore.abandon`, the manual-only path — the auto-abandon
+   * path already counts the session via `penalizeAbandonedSession` above.
+   */
+  recordManualAbandon: () => void;
   /**
    * Evaluates and, if legal, atomically applies a merge (docs/PLAN.md M3): combining
    * `GROWTH.fishPerMerge` same-stage, same-species fish into one fish of the next stage. Always
@@ -127,6 +136,9 @@ export const useAppStore = create<AppStore>()(
             stats: { ...s.stats, abandonedSessions: s.stats.abandonedSessions + 1 },
           };
         }),
+
+      recordManualAbandon: () =>
+        set((s) => ({ stats: { ...s.stats, abandonedSessions: s.stats.abandonedSessions + 1 } })),
 
       mergeFish: (selectedIds, now) => {
         // Evaluated against a single read of current state, then applied in one `set` — the

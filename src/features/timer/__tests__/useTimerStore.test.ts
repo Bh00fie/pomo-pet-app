@@ -137,6 +137,37 @@ describe('reset / abandon / tick', () => {
     expect(cancel).toHaveBeenCalledWith('scheduled-id');
   });
 
+  it('a manual abandon counts as an abandoned session but never sickens a fish (M5-review fix)', async () => {
+    // Two decisions that must hold at once: the counter literally named "abandoned sessions"
+    // has to count a manual Give up (it did not, before this fix), and the separate, deliberate
+    // call that give-up stays exempt from the fish-health penalty must be unaffected — sickening
+    // a fish is still exclusively the auto-abandon path's (`penalizeAbandonedSession`) job.
+    useAppStore.getState().resetAll();
+    useAppStore.getState().awardSessionCompletion(MINUTE, NOW - MINUTE); // seed one healthy fish
+    const fishId = useAppStore.getState().fish[0].id;
+    expect(useAppStore.getState().stats.abandonedSessions).toBe(0);
+
+    useTimerStore.getState().start();
+    await flush();
+
+    jest.spyOn(Date, 'now').mockReturnValue(NOW + 2 * MINUTE);
+    useTimerStore.getState().abandon();
+    await flush();
+
+    expect(useTimerStore.getState().timer.status).toBe('abandoned');
+    expect(useAppStore.getState().stats.abandonedSessions).toBe(1);
+    expect(useAppStore.getState().fish.find((f) => f.id === fishId)?.health).toBe('healthy');
+  });
+
+  it('does not count an abandon call when there was no active session to abandon', () => {
+    // `machine.ts`'s ABANDON transition is already a no-op outside running/paused; the store's
+    // `wasActive` check must agree, so a stray call can never double-count.
+    useAppStore.getState().resetAll();
+    useTimerStore.getState().abandon(); // idle — the real UI never offers "Give up" here
+
+    expect(useAppStore.getState().stats.abandonedSessions).toBe(0);
+  });
+
   it('tick completes the session at the boundary and cancels the (now redundant) notification', async () => {
     useTimerStore.getState().start();
     await flush();

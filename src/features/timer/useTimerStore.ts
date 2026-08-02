@@ -131,7 +131,17 @@ export const useTimerStore = create<TimerStore>()((set, get) => {
 
     pause: () => get().dispatch({ type: 'PAUSE', now: Date.now() }),
     resume: () => get().dispatch({ type: 'RESUME', now: Date.now() }),
-    abandon: () => get().dispatch({ type: 'ABANDON', now: Date.now() }),
+    abandon: () => {
+      // Only a running or paused session can actually be abandoned (see `machine.ts`'s ABANDON
+      // guard) — check before dispatching so a stray call from an already-idle/terminal state
+      // (the UI never offers "Give up" then) can't double-count. This is the manual-only path:
+      // the auto-abandon path (`resolveForeground`) dispatches ABANDON directly, not through
+      // here, and counts itself via `penalizeAbandonedSession` instead — so the two can never
+      // double-increment the same abandonment.
+      const wasActive = get().timer.status === 'running' || get().timer.status === 'paused';
+      get().dispatch({ type: 'ABANDON', now: Date.now() });
+      if (wasActive) useAppStore.getState().recordManualAbandon();
+    },
 
     tick: (now) => {
       // While a background excursion is open, `resolveForeground` is the *only* thing allowed to

@@ -152,6 +152,30 @@ describe('penalizeAbandonedSession (docs/PLAN.md M4)', () => {
   });
 });
 
+describe('recordManualAbandon (M5-review fix)', () => {
+  it('increments abandonedSessions without touching fish health, unlike the auto-abandon path', () => {
+    useAppStore.getState().awardSessionCompletion(25 * MINUTE, 1_700_000_000_000);
+    const fishId = useAppStore.getState().fish[0].id;
+
+    useAppStore.getState().recordManualAbandon();
+
+    expect(useAppStore.getState().stats.abandonedSessions).toBe(1);
+    expect(useAppStore.getState().fish.find((f) => f.id === fishId)?.health).toBe('healthy');
+  });
+
+  it('touches no other stat', () => {
+    useAppStore.getState().awardSessionCompletion(25 * MINUTE, 1_700_000_000_000);
+    const before = useAppStore.getState().stats;
+
+    useAppStore.getState().recordManualAbandon();
+
+    const after = useAppStore.getState().stats;
+    expect(after.currentStreak).toBe(before.currentStreak);
+    expect(after.totalFocusMs).toBe(before.totalFocusMs);
+    expect(after.completedSessions).toBe(before.completedSessions);
+  });
+});
+
 describe('mergeFish', () => {
   function seedFry(id: string): Fish {
     return createFish(STARTER_SPECIES_ID, 0, id);
