@@ -1,6 +1,6 @@
 # Project Context
 
-## Status: M4 (accountability + streaks) complete pending the phone gates — M5 is next
+## Status: M5 (stats, settings, polish) complete pending the phone gates — M6a is next and last
 
 The Expo app exists on `main`, builds, has a working Pomodoro timer, and completed focus sessions
 hatch/grow procedurally drawn Skia fish that swim in the Aquarium tab. As of M3 the full core loop
@@ -8,18 +8,21 @@ is closed: sessions grow fish, capped fish accumulate, and three same-stage fish
 merged into one of the next stage with a converge/burst/reveal sequence. M4 adds the retention
 half: leaving a running focus session backgrounded past a grace period auto-abandons it and marks
 a fish sick, a completed session cures it, and consecutive-day streaks are tracked and shown on
-the Focus screen. **M4's logic is now considered done** — its one open product question (whether
-backgrounding for the entire session should escape the penalty) was decided and implemented, see
-below — and only the on-device gates remain. `docs/PLAN.md` is the milestone sequence; M5 (stats,
-settings, polish) is next.
+the Focus screen. **M4's logic is done** — its one open product question (whether backgrounding
+for the entire session should escape the penalty) was decided and implemented, see below. M5 fills
+in everything around that loop: a real Stats screen, a Settings tab, first-launch onboarding, and
+a reduce-motion setting that is a genuine two-way override rather than an OS mirror. **Every screen
+now shows real data except the Shop**, which is exactly M6a's job. Only the on-device gates remain.
+`docs/PLAN.md` is the milestone sequence; **M6a (shop UX against the mock provider) is the last
+MVP milestone**, and it carries the $99 decision gate.
 
 ### Current repo state (2026-08-02)
 
 - `main` — Expo SDK 54 app. `app/` holds Expo Router routes only (thin re-exports); everything
   real is under `src/{config,features,store,anim,ui,theme}`. Zustand + AsyncStorage `persist`
   with `SCHEMA_VERSION` and a migration runner wired in from commit one
-  (`src/store/migrations.ts` — now at `SCHEMA_VERSION` 2, see the M2 review notes below). The
-  Focus and Aquarium screens are real; stats/shop are still labelled placeholders.
+  (`src/store/migrations.ts` — now at `SCHEMA_VERSION` 3, see the M2 and M5 notes below). Focus,
+  Aquarium, Stats and Settings are all real; **only the Shop is still a placeholder** (M6a).
 - **Timer engine (M1) is real.** `src/features/timer/machine.ts` is a pure transition function
   (no React/RN/Expo imports — keep it that way) over
   `{ status, mode, endsAt, durationMs, pausedRemainingMs }`. Time is always absolute: a running
@@ -45,7 +48,10 @@ settings, polish) is next.
     The only `useState` in the tank is the `onLayout` size, which changes once.
   - **`useReduceMotion` returns a duration *multiplier* (number), not a boolean.** Changed at M2.
     Multiply a `withTiming` duration — or a per-frame delta — by it. Never write
-    `if (useReduceMotion())`: 0.35 is truthy and the check silently inverts.
+    `if (useReduceMotion())`: 0.35 is truthy and the check silently inverts. Compare against 1
+    when you genuinely need a boolean, as `Tank.tsx` does. As of M5 it also resolves the user's
+    tri-state override — see the M5 section below — but it is still **the only** thing any
+    consumer reads, which is why the override needed no per-consumer changes.
   - Motion tokens (`src/anim/motion.ts`) are the only source of durations/easings/springs.
     `Ripple` and `ParticleBurst` are wired into the M3 merge reveal (`MergeSequence.tsx`), and
     `springs.penalty` into the M4 healthy→sick wince in `Tank.tsx`. Every token now has a consumer.
@@ -127,33 +133,97 @@ settings, polish) is next.
     hue still reads as that species, just ill — not a flat recolor; `colors.sick` is now unused),
     `HEALTH.sickTailWagMultiplier` slows the tail wag, and `Tank.tsx` plays a damped
     `springs.penalty` wince on the healthy→sick transition, skipped under Reduce Motion.
+- **Stats, settings, onboarding (M5) are real.**
+  - **`settings.reduceMotion` is a tri-state `'system' | 'on' | 'off'`, not a boolean.**
+    `src/anim/useReduceMotion.ts` is the **only** reader — `'system'` defers to
+    `AccessibilityInfo`, `'on'` forces reduced motion when the OS setting is off, `'off'` forces
+    **full** motion when the OS setting is on. That last direction is the point of the change: the
+    old boolean could only ever add reduced motion. All six preference × OS-state combinations are
+    tested. Because every animation consumer reads only the hook's number, nothing else changed —
+    keep it that way; a consumer that reads `settings.reduceMotion` directly would bypass the OS
+    half of the resolution.
+  - **`SCHEMA_VERSION` is 3.** The 2→3 migration maps a stored `true` to `'on'` and everything
+    else — `false`, missing, corrupt — to `'system'`, **never `'off'`**. v2's `false` meant "no
+    override on top of the OS setting"; `'off'` is a new capability that no v2 payload could have
+    expressed, and mapping `false` there would silently switch off the accessibility setting for
+    every user who has the OS toggle on. Same lesson as the M2 migration: the *meaning* of a
+    persisted value is part of its schema.
+  - **`src/features/stats/stats.ts` is pure, with an injected `now`** — same discipline as
+    `streak.ts` and the timer machine. The 7-day window is built by subtracting from `now`'s local
+    **calendar fields** (`new Date(y, m, d - i)`), never by dividing raw ms. `StatsScreen.tsx`
+    holds no date math; if you find yourself writing `new Date(dateKey)` in a component, stop —
+    that parses a date-only string as *UTC* midnight and reads back the previous local day west of
+    UTC, which is why `DayFocus` carries `weekday` rather than letting the caller re-derive it.
+  - **The M5 DST tests were vacuous on the first pass, and this is the second time in two
+    milestones.** M4's failure was the *mechanism* (`process.env.TZ` set from a test file, silently
+    ignored). M5 got the mechanism right — pinned in `jest.config.js`, asserted inside the test —
+    and still tested nothing, because both cases used a midday `now`. The DST shift is one hour, so
+    from midday even naive ms subtraction lands on the right calendar date; all 16 tests passed
+    against a deliberately broken `getWeeklyFocus`. The discriminating inputs are a `now` **within
+    an hour of local midnight on a day *after* the transition, looking back across it** — Mar 9
+    00:30 (naive arithmetic drops the transition day out of the window) and Nov 2 23:30 (naive
+    arithmetic emits it twice). **Rule this proves, extending M4's: pinning the environment is
+    necessary but not sufficient — the inputs have to be ones a wrong implementation gets wrong.
+    Mutation-test any test whose whole purpose is an edge case.**
+  - Settings deliberately does **not** duplicate the Focus screen's work/break steppers — one
+    source of truth for `settings.workMinutes`/`shortBreakMinutes`. Verified, not assumed.
+  - The reset-data action is gated behind `Alert.alert`: the `cancel` button has no `onPress` and
+    the `destructive` button is the only caller of `resetAll`. No path reaches the wipe without a
+    second deliberate tap.
+  - Onboarding is an overlay from `app/_layout.tsx` gated on `onboardingCompletedAt`, behind
+    `hydrated` so it does not flash for a frame on every launch. `onboardingCompletedAt` and
+    `completeOnboarding()` were verified present in the **M0** commit (`6940300`) — in `types.ts`,
+    `initialPersisted` *and* `partialize` — so the "no migration needed" claim really did hold this
+    time. (Checked against history rather than the current file, same as at M4.)
 - `useSessionReward` is mounted **once**, at `app/_layout.tsx`, so a session finishing on any tab
   awards. It de-dupes on the timer's `endsAt` (stable per session) via a hook-local ref — that
   guard is per hook instance, so **do not mount it a second time** or every session awards twice.
   Note `useTimer()` itself *is* mounted twice (root bridge + `FocusScreen`), so there are two
   `AppState` listeners; that is safe only because `noteBackgrounded`/`resolveForeground` are
   idempotent per excursion. Keep them that way.
-- **Tests exist and must stay green**: `npm test` (jest-expo preset), 184 tests across 14 suites.
-  Note `@testing-library/react-native` v14 has an *async* API — `render` and `fireEvent` must both
-  be awaited. Worklet/`SharedValue` code (`steering.ts`) is deliberately untested — there is
-  nothing meaningful to assert without a native runtime; the plain-number math it composes with
-  (`geometry.ts`) is tested instead. **`jest.config.js` pins `process.env.TZ` to
+- **Tests exist and must stay green**: `npm test` (jest-expo preset), 218 tests across 16 suites.
+  Note `@testing-library/react-native` v14 has an *async* API — `render`, `renderHook` and
+  `fireEvent` must all be awaited. Worklet/`SharedValue` code (`steering.ts`) is deliberately
+  untested — there is nothing meaningful to assert without a native runtime; the plain-number math
+  it composes with (`geometry.ts`) is tested instead. **`jest.config.js` pins `process.env.TZ` to
   `America/New_York`** — see the M4 review note below for why that has to live there and not in a
   test file.
-- Verified independently on 2026-08-02 after the M4 build: `npm test` 184/184 (14 suites),
+- Verified independently on 2026-08-02 after the M5 build: `npm test` 218/218 (16 suites),
   `npx tsc --noEmit` clean, `npx expo-doctor` 18/18, `npx expo export --platform ios` succeeds
-  (4.7 MB Hermes bundle; 4.69 MB at M3, 4.67 MB at M2, 4.02 MB at M1), `expo --version` → 54.x.
+  (4.71 MB Hermes bundle; 4.7 MB at M4, 4.69 MB at M3, 4.67 MB at M2, 4.02 MB at M1). The M5
+  additions cost ~10 KB of bundle — four screens' worth of UI and no new dependency.
 - **Not verified**: anything needing the user's phone — that the app opens in App Store Expo Go
   (the M0 gate), that the scheduled end-of-session notification actually fires (the M1 gate),
   that the tank *looks* right and holds 60fps with several fish (the M2 gate), that the merge
-  converge/burst/reveal sequence reads as satisfying (the M3 gate), and that a sick fish visibly
-  reads as unwell and the real iOS `AppState` sequence behaves as modelled (the M4 gate). Do not
-  mark any of them done until they confirm.
+  converge/burst/reveal sequence reads as satisfying (the M3 gate), that a sick fish visibly
+  reads as unwell and the real iOS `AppState` sequence behaves as modelled (the M4 gate), and that
+  the new screens lay out correctly on a real device — including that Reduce Motion `'off'` with
+  the iOS accessibility setting **on** visibly restores full motion, which is the only end-to-end
+  check of the M5 override (the M5 gate). Do not mark any of them done until they confirm.
 
-### Open issues found in the M2/M3/M4 reviews (2026-08-02)
+### Open issues found in the M2/M3/M4/M5 reviews (2026-08-02)
 
 Fixed already:
 
+- **The M5 DST stats tests were vacuous too** (M5 review) — the second time in two milestones, and
+  a *different* failure mode from M4's, which is why it got through. The mechanism was correct
+  (zone pinned in `jest.config.js`, asserted in the test) but both cases used a midday `now`, and a
+  one-hour DST shift never moves a midday timestamp across a date boundary — so naive ms
+  subtraction produced identical output and all 16 tests passed against a broken `getWeeklyFocus`.
+  Verified by mutation, not by reading. Replaced with inputs that discriminate: Mar 9 00:30 (the
+  naive version drops 2026-03-08 from the window, silently losing a day of focus time off the
+  chart) and Nov 2 23:30 (it emits 2026-11-01 twice, counting one day into two bars). Both assert
+  the midnight-to-midnight span first, matching the streak suite, and both were confirmed to fail
+  against the naive implementation while nothing else in the file does.
+- **`useReduceMotion` had no test at all** (M5 review), despite the tri-state override being the
+  headline of the milestone — `src/anim` had no `__tests__` directory. Now covered for all six
+  preference × OS-state combinations, live `reduceMotionChanged` events, listener cleanup and a
+  malformed persisted value. Written as **transitions on one mounted hook**, not six independent
+  renders, because three of the six combinations expect `1` — which is also the hook's value before
+  the async OS read resolves, so an isolated assertion would pass even if the OS value never
+  arrived. That includes `'off'` + OS-on, the single most important case. Verified against four
+  mutants (drop the `'off'` branch, drop the `'on'` branch, ignore the OS value, leak the
+  listener); each is caught.
 - **The M4 DST tests were vacuous** (M4 review). They claimed to cover spring-forward and
   fall-back and covered neither: `process.env.TZ` assigned inside a `beforeAll` is **silently
   ignored** — the runtime resolves its zone before any test file loads — so they ran in the
@@ -172,6 +242,25 @@ Fixed already:
 
 Checked and **confirmed sound**, listed because they were claims worth distrusting:
 
+- **The M5 reduce-motion override really does work in both directions.** Traced all six
+  combinations against the actual code rather than the "composes transparently" claim, then pinned
+  each one with a test: `'off'` genuinely returns `1` while the OS setting is on, `'on'` genuinely
+  returns `REDUCED_MOTION_SCALE` while the OS setting is off, and `'system'` is a true passthrough
+  including live OS toggles. The "no per-consumer changes needed" claim also holds — every consumer
+  (`Ripple`, `ParticleBurst`, `useAquariumClock`, `MergeSequence`, `Tank`) reads only the hook's
+  return value; grepped, nothing reads `settings.reduceMotion` directly except the Settings UI.
+- **The 2→3 migration is correct and defaults existing users to `'system'`,** not `undefined` and
+  not a crash — including when `settings` is absent entirely. Consistent with the M2/M4 pattern,
+  and the mapping of `false` → `'system'` rather than `'off'` is the right call for the reason the
+  migration comment gives.
+- **"`onboardingCompletedAt` already existed since M0" — true.** Verified against commit `6940300`
+  itself, not the current file: present in `types.ts`, `initialPersisted` and `partialize`, with
+  `completeOnboarding()` alongside it. No payload can be missing it, so no migration was needed.
+- **The reset-data confirm dialog has no bypass.** `cancel` has no `onPress`; the `destructive`
+  button is the only reference to `resetAll` in the screen. A double-tap queues a second alert
+  rather than skipping one, and `resetAll` is idempotent regardless.
+- **Settings does not duplicate the Focus screen's duration controls.** Grepped: the only
+  `workMinutes`/`shortBreakMinutes` UI in the app is `FocusScreen.tsx`'s steppers.
 - **"No `SCHEMA_VERSION` bump needed" — true this time.** Verified against the M0 commit rather
   than the current file: `abandonedSessions`, `currentStreak`, `longestStreak`,
   `lastCompletedLocalDate` and `focusMsByDate` have been in `Stats` *and* in
@@ -206,6 +295,39 @@ Checked and **confirmed sound**, listed because they were claims worth distrusti
 
 Flagged for the user, deliberately not fixed unilaterally:
 
+- **`settings.hapticsEnabled` is a persisted setting with no consumer anywhere** (new, M5;
+  self-flagged by the build agent and confirmed). It has been in the schema since M0, defaults to
+  `true`, and nothing reads it — there is no haptics code in the app at all. Correctly left out of
+  the Settings screen, since a toggle that does nothing is worse than no toggle. Two clean
+  resolutions: wire up `expo-haptics` (session start/complete, merge, penalty) and *then* add the
+  switch, or drop the field in the next migration. **Do not add the switch on its own.**
+- **The tank's frame loop still runs while another tab is focused** (carried from M4, where it was
+  tagged as an M5 polish item — M5 did not do it). Now slightly worse in practice, because there
+  are five tabs and four of them are not the Aquarium. The fix is to gate `useAquariumClock` on
+  navigation focus; whether it resumes cleanly is device-only, which is the honest reason it was
+  not done blind. Cheap to fold into M6a's UI work.
+- **Persisting the in-flight session is now unscheduled.** M4's list called it an M5 item and M5
+  did not do it, so force-quitting mid-session still both loses a completed reward and escapes the
+  penalty. It genuinely does belong with the open M4 penalty decision rather than in a polish
+  milestone — but it is now the only MVP-era item with no milestone attached at all.
+- **Three hardcoded colors remain outside the theme** (new, M5; self-flagged and confirmed):
+  `Ripple`'s `#EAF4FF` and `ParticleBurst`'s `#FFD166` defaults, and the `rgba()` fills in
+  `AquariumScreen`'s count pill and `FishTapTarget`'s hit area. Endorsing the decision not to
+  paper over it: these are alpha-blended overlays and per-component defaults, and `src/theme` has
+  no token shape for either. It is a design-system gap to close deliberately (probably alongside
+  M6a's paywall/locked-species styling, which will need overlay tokens anyway), not three more
+  literals moved around.
+- **"LEFT EARLY" on Stats makes M4's abandoned-session under-count user-visible** (new, M5).
+  `stats.abandonedSessions` is incremented only by the auto-abandon path, never by a manual "Give
+  up" — an accepted M4 limitation that now has a labelled tile showing it. Whatever gets decided
+  about the give-up exemption now has a UI consequence, so the two should be decided together.
+- **`resetAll` also clears `onboardingCompletedAt`**, so wiping data re-shows onboarding — which
+  means the onboarding code's "no way to re-trigger it" comment is not strictly true. Sensible for
+  a reset-to-first-launch action; just be aware it is the one re-entry path. It also does not touch
+  the transient timer store, so a session left running survives a reset and awards into the fresh
+  state. Fine for a testing-only affordance, should not ship as-is.
+- **`StatsScreen` captures `now` at render**, so an app left open across local midnight shows a
+  stale window until something re-renders it. Harmless in practice, but not handled.
 - ~~**A user can never get a second fish, so merging is unreachable.**~~ **Resolved at M3** — you
   chose "grow any under-cap fish; spawn a new Fry only once every fish is capped", over "spawn
   every session" and "spawn every N sessions". Implemented and verified in `reward.ts`.
@@ -263,10 +385,9 @@ Flagged for the user, deliberately not fixed unilaterally:
   — and only awards — when the app next comes to the foreground. Force-quitting instead loses the
   reward silently. Fixing it means persisting the in-flight session, which interacts with the M4
   accountability rules; worth deciding alongside them rather than in isolation.
-- **The tank's frame loop runs whenever `Tank` is mounted, including while another tab is
-  focused.** Expo Router keeps tab screens mounted, so the aquarium animates (and draws battery)
-  while the user is on Focus. The fix is to gate `setActive` on navigation focus, but whether it
-  resumes cleanly is exactly the kind of thing that needs a device — a good M5 polish item.
+- ~~**The tank's frame loop runs whenever `Tank` is mounted, including while another tab is
+  focused** — a good M5 polish item.~~ **Still open, and M5 did not do it** — see the M5 entry
+  above, which is now the live version of this item.
 - ~~`awardSessionCompletion` updates `fish` only; `stats` is still all zeros.~~ **Resolved at
   M4** — `totalFocusMs`, `completedSessions`, `focusMsByDate` and the streak fields are all
   written in the same `set` as the fish reward. The Stats *screen* is still a placeholder reading

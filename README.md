@@ -6,8 +6,8 @@ the hit — that accountability loop (in the spirit of apps like Forest) is the 
 
 ## Status
 
-🏗 **M4 complete — the loop is closed *and* it has consequences.** Start/pause/resume/reset run off
-an absolute-timestamp state machine (`endsAt`, never a decrementing counter), with customizable
+🏗 **M5 complete — every screen is real except the Shop.** Start/pause/resume/reset run off an
+absolute-timestamp state machine (`endsAt`, never a decrementing counter), with customizable
 work/break lengths and a local notification scheduled for the end of the session. Finishing a
 focus session grows a fish, drawn procedurally in Skia — body, tail and fins are parametric paths,
 so the three growth stages are parameter sets rather than separate assets — and the whole tank
@@ -17,14 +17,24 @@ same stage and merge them into one of the next stage, with a converge → burst 
 sequence. Leave a focus session backgrounded past an 8-second grace period — for the whole session
 or just past the grace period, it makes no difference now — and it is abandoned and a fish goes
 grey, desaturated and sluggish, until a completed session nurses it back. Consecutive days with a
-completed session build a streak, shown on the Focus screen. See [`docs/PLAN.md`](docs/PLAN.md)
-for the milestone sequence and what's actually verified.
+completed session build a streak.
+
+M5 fills in everything around that loop: a Stats tab with today's focus time, current streak,
+all-time total and a seven-day bar chart (bucketed by *local* calendar day, so it holds up across a
+DST transition and near midnight); a Settings tab with notifications, a reset-all-data action
+behind a confirm dialog, and a Reduce Motion control that is a genuine two-way override — it can
+force **full** motion even when iOS accessibility asks for reduced, not just the other way round;
+and a first-launch explainer of the core loop. See [`docs/PLAN.md`](docs/PLAN.md) for the milestone
+sequence and what's actually verified. **M6a — the shop UX against a mock provider — is the last
+MVP milestone**, and it carries the decision gate on whether to spend the $99.
 
 Open items all need a real iPhone: the M0 gate (the project opens in App Store Expo Go), the M1
 gate (the end-of-session notification genuinely fires), the M2 gate (the tank looks right and
-stays smooth with several fish), the M3 gate (the merge sequence reads as satisfying) and the M4
-gate (a sick fish reads as unwell, and real iOS `AppState` behaves as modelled). Everything
-machine-checkable — 189 unit tests, type-check, `expo-doctor`, iOS bundle export — passes.
+stays smooth with several fish), the M3 gate (the merge sequence reads as satisfying), the M4
+gate (a sick fish reads as unwell, and real iOS `AppState` behaves as modelled) and the M5 gate
+(the new screens lay out correctly, and forcing Reduce Motion off visibly restores full motion).
+Everything machine-checkable — 218 unit tests, type-check, `expo-doctor`, iOS bundle export —
+passes.
 
 ## Running it
 
@@ -52,7 +62,7 @@ npm run doctor
 ```
 app/                 Expo Router routes — thin re-exports only
 src/config/          tunable constants (timer lengths, growth curve, grace periods)
-src/features/        timer, aquarium, stats, shop — one folder per feature
+src/features/        timer, aquarium, stats, settings, onboarding, shop — one folder per feature
 src/store/           Zustand store, persisted slice, schema version + migrations
 src/anim/            motion tokens, reduce-motion hook, shared animation primitives
 src/ui/              Screen / Text / Button / Card primitives

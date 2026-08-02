@@ -337,9 +337,10 @@ Deliberate, decided, and *not* bugs to be silently fixed later — revisit each 
 - **Force-quitting while backgrounded escapes the penalty entirely.** `useTimerStore` is transient
   by design (M1), so `backgroundedAt` and the in-flight session die with the process; relaunching
   finds an idle timer and nothing to penalize. Same root cause as "a completed session is lost if
-  force-quit", and the same fix — persisting the in-flight session — which is an M5 item, not an
-  M4 one. M4 only raises the stakes, by making it a way to dodge a consequence rather than only a
-  way to lose a reward.
+  force-quit", and the same fix — persisting the in-flight session — which was pencilled in as an
+  M5 item. **M5 did not do it**; see the close-of-M5 list, where it is now unscheduled pending the
+  open penalty decision. M4 only raises the stakes, by making it a way to dodge a consequence
+  rather than only a way to lose a reward.
 - **A background excursion that starts within seconds of `endsAt` is penalized in full.** Falls
   straight out of your decision rather than being an oversight: the rule measures the excursion,
   not its overlap with the session, so backgrounding at 24:57 of a 25:00 session and returning an
@@ -347,11 +348,114 @@ Deliberate, decided, and *not* bugs to be silently fixed later — revisit each 
   under "leaving the app is what's punished" — but if it ever feels too harsh, the one-line change
   is to clamp the excursion to `min(now, endsAt) - backgroundedAt`.
 
-## M5 — Stats, settings, polish
+## M5 — Stats, settings, polish  [~] built and unit-tested, awaiting the on-device demo
 
-- [ ] Stats screen: today's focus time, current streak, all-time total, weekly bars
-- [ ] Onboarding flow, settings, reduce-motion respected everywhere
-- [ ] Visual polish pass across all screens
+Every screen in the MVP now shows real data — there are no placeholder screens left except the
+Shop, which is M6a's job. What remains is phone-only: the layout gate below.
+
+- [x] Stats screen: today's focus time, current streak, all-time total, weekly bars.
+      `src/features/stats/stats.ts` is the pure, injected-`now` date-bucketing layer —
+      `getTodayFocusMs` and `getWeeklyFocus` over the existing `stats.focusMsByDate` — with no
+      React/store imports, same discipline as `features/streak/streak.ts` and the timer machine.
+      `StatsScreen.tsx` does **no date math of its own**; it renders four tiles, a 7-bar weekly
+      chart and the abandoned-session count, and nothing else. The window is built by subtracting
+      from `now`'s own local **calendar fields** (`new Date(y, m, d - i)`) rather than dividing raw
+      milliseconds, which is what survives a DST transition inside the 7 days.
+- [x] **The "last 7 days" boundary is tested for real, including across both DST transitions.**
+      Worth spelling out because the first version of these tests repeated the M4 failure in a
+      subtler form: the *mechanism* was right (zone pinned in `jest.config.js`, asserted inside the
+      test) but the date pairs did not discriminate — both used a midday `now`, and since the DST
+      shift is only an hour, naive ms subtraction still lands on the correct calendar date from
+      midday. All 16 tests passed against a deliberately broken implementation. The discriminating
+      shape is a `now` **within an hour of local midnight on a day after the transition, looking
+      back across it**: Mar 9 00:30 (naive arithmetic drops 2026-03-08 out of the window entirely —
+      a day of focus time vanishing from the chart) and Nov 2 23:30 (naive arithmetic emits
+      2026-11-01 twice and drops 2026-10-27 — one day counted into two bars). Both now assert the
+      midnight-to-midnight span first, and both were verified to fail against the naive version.
+      **Rule this proves, extending M4's: pinning the environment is necessary but not sufficient —
+      the *inputs* have to be ones a wrong implementation gets wrong.**
+- [x] Reduce motion respected everywhere, and now a real user override rather than an OS mirror.
+      `settings.reduceMotion` is a tri-state `'system' | 'on' | 'off'`, resolved in
+      `src/anim/useReduceMotion.ts` — the only place that reads it. `'system'` defers to
+      `AccessibilityInfo`, `'on'` forces reduced motion when the OS setting is off, `'off'` forces
+      **full** motion when the OS setting is on. Every animation consumer (`Ripple`,
+      `ParticleBurst`, `useAquariumClock`, `MergeSequence`, `Tank`'s penalty wince) reads only this
+      hook's number and needed no change. All six preference × OS-state combinations are tested,
+      plus live `reduceMotionChanged` events and listener cleanup — written as transitions on one
+      mounted hook, because three of the six expect `1`, which is also the value before the async
+      OS read resolves, so isolated assertions would pass without the OS value ever arriving.
+- [x] `SCHEMA_VERSION` 2 → 3 for the tri-state, with a real migration. A stored `true` becomes
+      `'on'`; `false`, missing, or corrupt becomes `'system'` — deliberately never `'off'`, since
+      v2's `false` only ever meant "no extra override on top of the OS setting" and `'off'` is a
+      new capability no v2 payload could have expressed. Mapping it there would silently disable
+      the accessibility setting for anyone who had the OS toggle on. Tested including the full
+      v1 → v3 walk.
+- [x] Settings tab: the reduce-motion segmented control, the notifications toggle (already read by
+      `useTimerStore` since M1, previously with no UI), and a reset-all-data action.
+      **Work/break length is deliberately not duplicated here** — it lives on the Focus screen and
+      repeating it would be a second source of truth for the same field. Verified: the only
+      `workMinutes`/`shortBreakMinutes` controls in the app are `FocusScreen.tsx`'s.
+- [x] The destructive reset is genuinely gated. `Alert.alert` with a `cancel` button that has no
+      `onPress` and a separate `destructive` button that is the *only* caller of `resetAll` —
+      there is no path to the wipe without tapping the second button, and a double-tap can only
+      queue a second alert, not skip one. `resetAll` is idempotent anyway.
+- [x] First-launch onboarding: a four-step explainer of the core loop, rendered as an overlay from
+      `app/_layout.tsx` while `onboardingCompletedAt` is `null`, gated behind `hydrated` so a
+      returning user's real value is read instead of flashing the screen for a frame every launch.
+      Confirmed against the M0 commit rather than taken on faith: `onboardingCompletedAt` and
+      `completeOnboarding()` have both been in `types.ts` / `initialPersisted` / `partialize` since
+      commit `6940300`, so no stored payload can be missing the field and no migration was needed
+      for it. Scrollable rather than fixed-height, so nothing can clip on a small device.
+- [~] Visual polish pass across all screens. Partly done — `radius.pill` and `spacing.lg` replaced
+      three ad-hoc literals, `colors.danger` finally has a consumer, and `Card`'s `style` prop
+      widened to `StyleProp<ViewStyle>` so styles can be composed. But this is the one item here
+      that cannot be signed off from a terminal, and three known gaps are listed below.
+
+### On-device gate for M5
+
+- [ ] **On a real iPhone: the new screens lay out correctly and the reduce-motion override
+      actually changes what you see.** Specifically — Stats reads correctly with a real week of
+      data and with an empty history; the five-tab bar is not crowded; onboarding fits (or scrolls
+      cleanly) on the smallest target device and never reappears after dismissal; and setting
+      Reduce Motion to `off` with the iOS accessibility setting **on** visibly restores full tank
+      motion and the full merge sequence. That last one is the whole point of the tri-state and is
+      the only way to confirm it end to end.
+
+### Known and accepted limitations at the close of M5
+
+- **`settings.hapticsEnabled` is persisted but has no consumer anywhere.** It has been in the
+  schema since M0, defaults to `true`, and nothing reads it — there is no haptics code in the app
+  at all. Deliberately *not* surfaced in Settings, because a toggle that does nothing is worse than
+  no toggle. Either wire up `expo-haptics` (session start/complete, merge, penalty) and then add
+  the toggle, or drop the field in the next migration. Do not add the switch on its own.
+- **Three hardcoded colors remain outside the theme**: `Ripple`'s `#EAF4FF` and `ParticleBurst`'s
+  `#FFD166` defaults, and the `rgba()` fills in `AquariumScreen`'s count pill and
+  `FishTapTarget`'s hit area. These are alpha-blended overlays and per-component defaults, and the
+  theme has no token shape for either — a design-system gap, not an oversight to patch over with
+  more literals. (`Fish.tsx`'s `#ffffff` eye highlight is plain white and fine as a literal.)
+- **The tank's frame loop still runs while another tab is focused.** Carried over from M4's list,
+  where it was tagged as an M5 polish item; not done. Expo Router keeps tab screens mounted, so
+  `useAquariumClock`'s `useFrameCallback` animates and draws battery while the user sits on Focus,
+  Stats or Settings. The fix is to gate it on navigation focus, but whether it resumes cleanly is
+  device-only — hence deferred rather than done blind, and now cheap to fold into M6a's UI work.
+- **Persisting the in-flight session is still not done.** M4's list called it an M5 item; M5 did
+  not do it, so force-quitting mid-session still both loses a completed reward and escapes the
+  penalty. Unchanged in substance, just no longer scheduled — it needs its own decision alongside
+  the open M4 penalty question rather than being slipped into a polish milestone.
+- **`resetAll` also clears `onboardingCompletedAt`**, so wiping data re-shows onboarding. Sensible
+  for a "reset to first launch" action, but it does mean the onboarding code's claim that there is
+  "no way to re-trigger it" is not strictly true — Settings → Reset all data is one. It also does
+  not touch the transient timer store, so a session left running survives a reset and will still
+  award into the fresh state. Both are acceptable for a testing-only affordance; neither should
+  survive into a shipped build unchanged.
+- **Stats' `now` is captured at render.** `StatsScreen` calls `new Date()` in the render body, so
+  an app left open across local midnight keeps showing the previous day's window until something
+  re-renders it. Harmless in practice (any store write or tab switch refreshes it) and the fix is a
+  focus-effect tick, but it is not currently handled.
+- **"LEFT EARLY" on Stats inherits M4's under-count.** `stats.abandonedSessions` is incremented
+  only by the auto-abandon path, never by a manual "Give up" — an accepted M4 limitation that M5
+  has now made *user-visible* on a labelled tile. Whatever gets decided about the give-up
+  exemption now has a UI consequence too.
 
 ## M6a — Shop UX against the mock provider (free)
 
