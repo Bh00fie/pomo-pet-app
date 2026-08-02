@@ -37,27 +37,24 @@ export interface SessionRewardResult {
 }
 
 /**
- * Applies one session's reward to a fish collection: grows an existing fish's XP, or spawns a
- * fresh starter Fry if the user has none yet. Never mutates its input.
+ * Applies one session's reward to a fish collection (docs/PLAN.md M3 spawn rule — supersedes
+ * M2's "only spawn if zero fish"): grow an existing fish that still has room in its current
+ * stage, if one exists. Only spawn a fresh starter Fry when there is nothing to grow — the
+ * collection is empty, or every fish is already capped for its stage and growing one further
+ * would just be clamped away. This is what makes a second (and third, ...) fish reachable at
+ * all; merging (`src/features/pet/merge.ts`) is the only way any of them cross a stage boundary.
+ * Never mutates its input.
  */
 export function applySessionReward(input: SessionRewardInput): SessionRewardResult {
   const xpAwarded = xpForFocusMs(input.focusMs);
 
-  if (input.fish.length === 0) {
+  const growthTarget = input.fish.find((f) => f.xp < GROWTH.xpPerStage);
+
+  if (!growthTarget) {
     const hatched = addXp(createFish(STARTER_SPECIES_ID, input.now, input.idFactory()), xpAwarded);
-    return { fish: [hatched], awardedFishId: hatched.id, xpAwarded, spawned: true };
+    return { fish: [...input.fish, hatched], awardedFishId: hatched.id, xpAwarded, spawned: true };
   }
 
-  const target = pickGrowthTarget(input.fish);
-  const fish = input.fish.map((f) => (f.id === target.id ? addXp(f, xpAwarded) : f));
-  return { fish, awardedFishId: target.id, xpAwarded, spawned: false };
-}
-
-/**
- * Which fish grows: prefer one that still has room in its current stage. If every fish is
- * already capped (all waiting on a merge — M3), the session is still logged against the first
- * fish; `addXp` clamps at the cap rather than losing the XP silently.
- */
-function pickGrowthTarget(fish: Fish[]): Fish {
-  return fish.find((f) => f.xp < GROWTH.xpPerStage) ?? fish[0];
+  const fish = input.fish.map((f) => (f.id === growthTarget.id ? addXp(f, xpAwarded) : f));
+  return { fish, awardedFishId: growthTarget.id, xpAwarded, spawned: false };
 }

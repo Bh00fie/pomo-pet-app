@@ -82,17 +82,47 @@ describe('applySessionReward', () => {
     expect(updatedGrowing.xp).toBe(xpForFocusMs(5 * MS_PER_MINUTE));
   });
 
-  it('falls back to the first fish when every fish is already capped, clamping rather than losing XP', () => {
+  it('spawns a new fry when every existing fish is already capped, rather than wasting the XP (M3)', () => {
     const capped = addXp(createFish(STARTER_SPECIES_ID, 0, 'capped'), GROWTH.xpPerStage);
 
     const result = applySessionReward({
       fish: [capped],
       focusMs: 25 * MS_PER_MINUTE,
+      now: 5000,
+      idFactory,
+    });
+
+    expect(result.spawned).toBe(true);
+    expect(result.fish).toHaveLength(2);
+    expect(result.awardedFishId).toBe('new-fish');
+
+    const hatched = result.fish.find((f) => f.id === 'new-fish')!;
+    expect(hatched).toMatchObject({
+      speciesId: STARTER_SPECIES_ID,
+      stage: 'fry',
+      bornAt: 5000,
+      health: 'healthy',
+    });
+    expect(hatched.xp).toBe(xpForFocusMs(25 * MS_PER_MINUTE));
+
+    // The already-capped fish is left untouched, still exactly at the cap — the new session's
+    // XP went to the new fry instead of being clamped away on a fish with no room left.
+    const stillCapped = result.fish.find((f) => f.id === 'capped')!;
+    expect(stillCapped.xp).toBe(GROWTH.xpPerStage);
+  });
+
+  it('spawns a new fry when multiple existing fish are all capped', () => {
+    const cappedA = addXp(createFish(STARTER_SPECIES_ID, 0, 'capped-a'), GROWTH.xpPerStage);
+    const cappedB = addXp(createFish(STARTER_SPECIES_ID, 0, 'capped-b'), GROWTH.xpPerStage);
+
+    const result = applySessionReward({
+      fish: [cappedA, cappedB],
+      focusMs: 10 * MS_PER_MINUTE,
       now: 0,
       idFactory,
     });
 
-    expect(result.awardedFishId).toBe('capped');
-    expect(result.fish[0].xp).toBe(GROWTH.xpPerStage);
+    expect(result.spawned).toBe(true);
+    expect(result.fish).toHaveLength(3);
   });
 });
