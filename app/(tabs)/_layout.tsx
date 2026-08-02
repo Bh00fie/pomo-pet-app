@@ -16,6 +16,8 @@ export default function TabsLayout() {
       <Tabs.Screen name="aquarium" options={{ title: 'Aquarium' }} />
       <Tabs.Screen name="stats" options={{ title: 'Stats' }} />
       <Tabs.Screen name="shop" options={{ title: 'Shop' }} />
+      {/* Spike-only tab. Lives on explore/3d-aquarium and is not part of the MVP nav. */}
+      <Tabs.Screen name="tank3d" options={{ title: '3D' }} />
     </Tabs>
   );
 }
