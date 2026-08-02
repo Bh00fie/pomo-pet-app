@@ -220,3 +220,88 @@ describe('migrate — v3 -> v4, activeSpeciesId (M6a)', () => {
     expect(result.settings.activeSpeciesId).toBe(STARTER_SPECIES_ID);
   });
 });
+
+/** A realistic v4 payload: the shape persisted from the close of M6a through the post-M6a species
+ *  pass and debug panel, before the reward rearchitecture dropped `Fish.xp`. */
+function v4State(overrides: Record<string, unknown> = {}): unknown {
+  return {
+    fish: [
+      { id: 'a', speciesId: STARTER_SPECIES_ID, stage: 'fry', xp: 45, bornAt: 1000, health: 'healthy' },
+      { id: 'b', speciesId: STARTER_SPECIES_ID, stage: 'juvenile', xp: 120, bornAt: 2000, health: 'sick' },
+    ],
+    settings: {
+      workMinutes: 25,
+      shortBreakMinutes: 5,
+      longBreakMinutes: 15,
+      hapticsEnabled: true,
+      notificationsEnabled: true,
+      reduceMotion: 'system',
+      activeSpeciesId: STARTER_SPECIES_ID,
+    },
+    stats: {
+      totalFocusMs: 0,
+      completedSessions: 0,
+      abandonedSessions: 0,
+      currentStreak: 0,
+      longestStreak: 0,
+      lastCompletedLocalDate: null,
+      focusMsByDate: {},
+    },
+    entitlements: { unlockedSpeciesIds: [STARTER_SPECIES_ID], unlockedTankIds: ['rectangular'] },
+    onboardingCompletedAt: null,
+    ...overrides,
+  };
+}
+
+describe('migrate — v4 -> v5, Fish.xp removed (post-M6a reward rearchitecture)', () => {
+  it('drops the xp field from every persisted fish', () => {
+    const result = migrate(v4State(), 4);
+
+    expect(result.fish).toHaveLength(2);
+    for (const f of result.fish) {
+      expect(f).not.toHaveProperty('xp');
+    }
+  });
+
+  it('preserves every other field on each fish untouched', () => {
+    const result = migrate(v4State(), 4);
+
+    expect(result.fish[0]).toEqual({
+      id: 'a',
+      speciesId: STARTER_SPECIES_ID,
+      stage: 'fry',
+      bornAt: 1000,
+      health: 'healthy',
+    });
+    expect(result.fish[1]).toEqual({
+      id: 'b',
+      speciesId: STARTER_SPECIES_ID,
+      stage: 'juvenile',
+      bornAt: 2000,
+      health: 'sick',
+    });
+  });
+
+  it('handles an empty or missing fish array without crashing', () => {
+    expect(migrate(v4State({ fish: [] }), 4).fish).toEqual([]);
+    expect(migrate(v4State({ fish: undefined }), 4).fish).toEqual([]);
+  });
+
+  it('leaves every other persisted slice untouched', () => {
+    const before = v4State() as PersistedState;
+    const after = migrate(before, 4);
+
+    expect(after.settings).toEqual(before.settings);
+    expect(after.stats).toEqual(before.stats);
+    expect(after.entitlements).toEqual(before.entitlements);
+    expect(after.onboardingCompletedAt).toBe(before.onboardingCompletedAt);
+  });
+
+  it('walking from v1 all the way to v5 applies all four migrations in order', () => {
+    const result = migrate(v1State({ settings: { reduceMotion: true } }), 1);
+    expect(result.entitlements.unlockedSpeciesIds).toEqual([STARTER_SPECIES_ID]);
+    expect(result.settings.reduceMotion).toBe('on');
+    expect(result.settings.activeSpeciesId).toBe(STARTER_SPECIES_ID);
+    expect(result.fish).toEqual([]);
+  });
+});

@@ -92,7 +92,6 @@ export function evaluateMerge(input: MergeInput): MergeResult {
     id: idFactory(),
     speciesId,
     stage: targetStage,
-    xp: 0,
     bornAt: now,
     health: 'healthy',
   };

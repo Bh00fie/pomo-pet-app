@@ -1,389 +1,272 @@
-import { GROWTH } from '@/config';
-import { addXp, createFish, GOLDEN_KOI_SPECIES_ID, STARTER_SPECIES_ID, type Fish } from '../model';
-import { applySessionReward, distributeXp, xpForFocusMs } from '../reward';
+import { REWARDS } from '@/config';
+import { GOLDEN_KOI_SPECIES_ID, INDIGO_BETTA_SPECIES_ID, STARTER_SPECIES_ID, type Fish } from '../model';
+import {
+  applySessionReward,
+  classifySessionLength,
+  hatchFish,
+  pickRandomSpeciesId,
+  stageForSessionLength,
+} from '../reward';
 
 const MS_PER_MINUTE = 60_000;
 
-describe('xpForFocusMs', () => {
-  it('awards GROWTH.xpPerFocusMinute per completed minute', () => {
-    expect(xpForFocusMs(25 * MS_PER_MINUTE)).toBe(25 * GROWTH.xpPerFocusMinute);
+describe('classifySessionLength', () => {
+  it('classifies below the threshold as short', () => {
+    expect(classifySessionLength(REWARDS.longSessionThresholdMinutes - 1)).toBe('short');
+    expect(classifySessionLength(0)).toBe('short');
   });
 
-  it('rounds partial minutes rather than truncating to zero', () => {
-    expect(xpForFocusMs(90_000)).toBe(Math.round(1.5 * GROWTH.xpPerFocusMinute));
+  it('classifies exactly at the threshold as long — "at or above" per spec, the boundary is long', () => {
+    expect(classifySessionLength(REWARDS.longSessionThresholdMinutes)).toBe('long');
   });
 
-  it('is zero for non-positive or non-finite input', () => {
-    expect(xpForFocusMs(0)).toBe(0);
-    expect(xpForFocusMs(-1000)).toBe(0);
-    expect(xpForFocusMs(NaN)).toBe(0);
+  it('classifies above the threshold as long', () => {
+    expect(classifySessionLength(REWARDS.longSessionThresholdMinutes + 1)).toBe('long');
+    expect(classifySessionLength(9999)).toBe('long');
   });
 });
 
-describe('applySessionReward', () => {
-  const idFactory = () => 'new-fish';
+describe('stageForSessionLength', () => {
+  it('short sessions hatch a Fry, long sessions hatch a Juvenile', () => {
+    expect(stageForSessionLength('short')).toBe('fry');
+    expect(stageForSessionLength('long')).toBe('juvenile');
+  });
+});
 
-  it('spawns a starter fry when the user has no fish yet', () => {
-    const result = applySessionReward({ fish: [], focusMs: 25 * MS_PER_MINUTE, now: 1000, idFactory });
+describe('pickRandomSpeciesId', () => {
+  it('throws on an empty pool rather than silently returning undefined', () => {
+    expect(() => pickRandomSpeciesId([])).toThrow();
+  });
 
-    expect(result.spawned).toBe(true);
+  it('returns the only option from a single-species pool', () => {
+    expect(pickRandomSpeciesId([STARTER_SPECIES_ID])).toBe(STARTER_SPECIES_ID);
+  });
+
+  it('uses the injected random source to select a specific index deterministically', () => {
+    const pool = [STARTER_SPECIES_ID, GOLDEN_KOI_SPECIES_ID, INDIGO_BETTA_SPECIES_ID];
+    expect(pickRandomSpeciesId(pool, () => 0)).toBe(STARTER_SPECIES_ID);
+    expect(pickRandomSpeciesId(pool, () => 0.4)).toBe(GOLDEN_KOI_SPECIES_ID);
+    // 0.999... must still land on the last index, never run past the end of the pool.
+    expect(pickRandomSpeciesId(pool, () => 0.999999)).toBe(INDIGO_BETTA_SPECIES_ID);
+  });
+
+  it('never returns an id outside the pool across many real-random draws', () => {
+    const pool = [STARTER_SPECIES_ID, GOLDEN_KOI_SPECIES_ID, INDIGO_BETTA_SPECIES_ID];
+    for (let i = 0; i < 300; i += 1) {
+      expect(pool).toContain(pickRandomSpeciesId(pool));
+    }
+  });
+
+  it('actually varies across many calls rather than always returning the same species', () => {
+    const pool = [STARTER_SPECIES_ID, GOLDEN_KOI_SPECIES_ID, INDIGO_BETTA_SPECIES_ID];
+    const seen = new Set(Array.from({ length: 300 }, () => pickRandomSpeciesId(pool)));
+    // With 300 draws across 3 species, the odds of a genuinely random source landing on only one
+    // are astronomically small (1/3)^299 — this fails fast against a hardcoded/broken draw.
+    expect(seen.size).toBeGreaterThan(1);
+  });
+});
+
+describe('hatchFish', () => {
+  it('creates one fish at the given stage/species and appends it, never mutating the input', () => {
+    const idFactory = () => 'new-fish';
+    const input: Fish[] = [];
+
+    const result = hatchFish(input, 'juvenile', GOLDEN_KOI_SPECIES_ID, 1000, idFactory);
+
+    expect(input).toEqual([]); // untouched
     expect(result.fish).toHaveLength(1);
-    expect(result.fish[0]).toMatchObject({
+    expect(result.hatched).toEqual({
       id: 'new-fish',
-      speciesId: STARTER_SPECIES_ID,
-      stage: 'fry',
+      speciesId: GOLDEN_KOI_SPECIES_ID,
+      stage: 'juvenile',
       bornAt: 1000,
       health: 'healthy',
     });
-    expect(result.fish[0].xp).toBe(xpForFocusMs(25 * MS_PER_MINUTE));
-    expect(result.awardedFishId).toBe('new-fish');
+    expect(result.fish[0]).toBe(result.hatched);
   });
 
-  it('grows an existing fish rather than spawning when one exists', () => {
-    const existing: Fish = createFish(STARTER_SPECIES_ID, 0, 'existing');
+  it('appends onto an existing non-empty collection without touching the existing fish', () => {
+    const existing: Fish = {
+      id: 'existing',
+      speciesId: STARTER_SPECIES_ID,
+      stage: 'elder',
+      bornAt: 0,
+      health: 'healthy',
+    };
+
+    const result = hatchFish([existing], 'fry', STARTER_SPECIES_ID, 500, () => 'fresh');
+
+    expect(result.fish).toHaveLength(2);
+    expect(result.fish[0]).toBe(existing);
+    expect(result.fish[1].id).toBe('fresh');
+  });
+});
+
+describe('applySessionReward — short session (below the threshold)', () => {
+  const idFactory = () => 'new-fish';
+
+  it('hatches exactly one Fry of the active species, appended to the collection', () => {
+    const result = applySessionReward({
+      fish: [],
+      focusMs: 25 * MS_PER_MINUTE, // well under the 50-minute threshold
+      now: 1000,
+      idFactory,
+      activeSpeciesId: GOLDEN_KOI_SPECIES_ID,
+      ownedSpeciesIds: [STARTER_SPECIES_ID, GOLDEN_KOI_SPECIES_ID],
+    });
+
+    expect(result.length).toBe('short');
+    expect(result.speciesId).toBe(GOLDEN_KOI_SPECIES_ID);
+    expect(result.hatchedFishId).toBe('new-fish');
+    expect(result.fish).toEqual([
+      { id: 'new-fish', speciesId: GOLDEN_KOI_SPECIES_ID, stage: 'fry', bornAt: 1000, health: 'healthy' },
+    ]);
+  });
+
+  it('never grows an existing fish — it always appends a new one, even with fish already present', () => {
+    const existing: Fish = {
+      id: 'existing',
+      speciesId: STARTER_SPECIES_ID,
+      stage: 'fry',
+      bornAt: 0,
+      health: 'healthy',
+    };
+
     const result = applySessionReward({
       fish: [existing],
       focusMs: 10 * MS_PER_MINUTE,
       now: 2000,
       idFactory,
+      activeSpeciesId: STARTER_SPECIES_ID,
+      ownedSpeciesIds: [STARTER_SPECIES_ID],
     });
 
-    expect(result.spawned).toBe(false);
-    expect(result.fish).toHaveLength(1);
-    expect(result.fish[0].id).toBe('existing');
-    expect(result.fish[0].xp).toBe(xpForFocusMs(10 * MS_PER_MINUTE));
-    expect(result.awardedFishId).toBe('existing');
-  });
-
-  it('does not mutate the input fish array or its members', () => {
-    const existing: Fish = createFish(STARTER_SPECIES_ID, 0, 'existing');
-    const input = [existing];
-    applySessionReward({ fish: input, focusMs: 10 * MS_PER_MINUTE, now: 0, idFactory });
-
-    expect(input[0].xp).toBe(0);
-    expect(existing.xp).toBe(0);
-  });
-
-  it('prefers a not-yet-capped fish over one waiting on a merge', () => {
-    const capped = addXp(createFish(STARTER_SPECIES_ID, 0, 'capped'), GROWTH.xpPerStage);
-    const growing = createFish(STARTER_SPECIES_ID, 0, 'growing');
-
-    const result = applySessionReward({
-      fish: [capped, growing],
-      focusMs: 5 * MS_PER_MINUTE,
-      now: 0,
-      idFactory,
-    });
-
-    expect(result.awardedFishId).toBe('growing');
-    const updatedCapped = result.fish.find((f) => f.id === 'capped')!;
-    const updatedGrowing = result.fish.find((f) => f.id === 'growing')!;
-    expect(updatedCapped.xp).toBe(GROWTH.xpPerStage);
-    expect(updatedGrowing.xp).toBe(xpForFocusMs(5 * MS_PER_MINUTE));
-  });
-
-  it('spawns a new fry when every existing fish is already capped, rather than wasting the XP (M3)', () => {
-    const capped = addXp(createFish(STARTER_SPECIES_ID, 0, 'capped'), GROWTH.xpPerStage);
-
-    const result = applySessionReward({
-      fish: [capped],
-      focusMs: 25 * MS_PER_MINUTE,
-      now: 5000,
-      idFactory,
-    });
-
-    expect(result.spawned).toBe(true);
     expect(result.fish).toHaveLength(2);
-    expect(result.awardedFishId).toBe('new-fish');
-
-    const hatched = result.fish.find((f) => f.id === 'new-fish')!;
-    expect(hatched).toMatchObject({
-      speciesId: STARTER_SPECIES_ID,
-      stage: 'fry',
-      bornAt: 5000,
-      health: 'healthy',
-    });
-    expect(hatched.xp).toBe(xpForFocusMs(25 * MS_PER_MINUTE));
-
-    // The already-capped fish is left untouched, still exactly at the cap — the new session's
-    // XP went to the new fry instead of being clamped away on a fish with no room left.
-    const stillCapped = result.fish.find((f) => f.id === 'capped')!;
-    expect(stillCapped.xp).toBe(GROWTH.xpPerStage);
+    expect(result.fish[0]).toBe(existing); // untouched by reference
+    expect(result.fish[1].stage).toBe('fry');
   });
 
-  it('spawns a new fry when multiple existing fish are all capped', () => {
-    const cappedA = addXp(createFish(STARTER_SPECIES_ID, 0, 'capped-a'), GROWTH.xpPerStage);
-    const cappedB = addXp(createFish(STARTER_SPECIES_ID, 0, 'capped-b'), GROWTH.xpPerStage);
-
-    const result = applySessionReward({
-      fish: [cappedA, cappedB],
+  it('does not mutate the input fish array', () => {
+    const input: Fish[] = [];
+    applySessionReward({
+      fish: input,
       focusMs: 10 * MS_PER_MINUTE,
       now: 0,
       idFactory,
+      activeSpeciesId: STARTER_SPECIES_ID,
+      ownedSpeciesIds: [STARTER_SPECIES_ID],
     });
-
-    expect(result.spawned).toBe(true);
-    expect(result.fish).toHaveLength(3);
-  });
-});
-
-describe('applySessionReward — spawnSpeciesId (docs/PLAN.md M6a)', () => {
-  const idFactory = () => 'new-fish';
-
-  it('defaults to the starter species when spawnSpeciesId is omitted (pre-M6a callers/tests unaffected)', () => {
-    const result = applySessionReward({ fish: [], focusMs: 25 * MS_PER_MINUTE, now: 0, idFactory });
-    expect(result.fish[0].speciesId).toBe(STARTER_SPECIES_ID);
+    expect(input).toEqual([]);
   });
 
-  it('hatches a fresh Fry as the given spawnSpeciesId when there is nothing to grow', () => {
+  it('defaults to the starter species when activeSpeciesId is omitted', () => {
+    const result = applySessionReward({ fish: [], focusMs: 10 * MS_PER_MINUTE, now: 0, idFactory });
+    expect(result.speciesId).toBe(STARTER_SPECIES_ID);
+  });
+
+  it('a session exactly one minute under the threshold is still short', () => {
     const result = applySessionReward({
       fish: [],
-      focusMs: 25 * MS_PER_MINUTE,
+      focusMs: (REWARDS.longSessionThresholdMinutes - 1) * MS_PER_MINUTE,
       now: 0,
       idFactory,
-      spawnSpeciesId: GOLDEN_KOI_SPECIES_ID,
+      activeSpeciesId: STARTER_SPECIES_ID,
+      ownedSpeciesIds: [STARTER_SPECIES_ID],
     });
-    expect(result.spawned).toBe(true);
-    expect(result.fish[0].speciesId).toBe(GOLDEN_KOI_SPECIES_ID);
-  });
-
-  it('spawns the given spawnSpeciesId once every existing fish is capped, leaving the capped fish’s own species alone', () => {
-    const cappedStarter = addXp(createFish(STARTER_SPECIES_ID, 0, 'capped'), GROWTH.xpPerStage);
-
-    const result = applySessionReward({
-      fish: [cappedStarter],
-      focusMs: 25 * MS_PER_MINUTE,
-      now: 0,
-      idFactory,
-      spawnSpeciesId: GOLDEN_KOI_SPECIES_ID,
-    });
-
-    expect(result.fish).toHaveLength(2);
-    const capped = result.fish.find((f) => f.id === 'capped')!;
-    const hatched = result.fish.find((f) => f.id === 'new-fish')!;
-    expect(capped.speciesId).toBe(STARTER_SPECIES_ID); // untouched — spawning a new species never rewrites an existing fish
-    expect(hatched.speciesId).toBe(GOLDEN_KOI_SPECIES_ID);
-  });
-
-  it('grows an existing under-cap fish of a different species rather than spawning — spawnSpeciesId only applies when nothing has room', () => {
-    const existingKoi = createFish(GOLDEN_KOI_SPECIES_ID, 0, 'koi');
-
-    const result = applySessionReward({
-      fish: [existingKoi],
-      focusMs: 10 * MS_PER_MINUTE,
-      now: 0,
-      idFactory,
-      spawnSpeciesId: STARTER_SPECIES_ID, // active species is the starter, but there's room on the koi
-    });
-
-    expect(result.spawned).toBe(false);
-    expect(result.fish).toHaveLength(1);
-    expect(result.fish[0].speciesId).toBe(GOLDEN_KOI_SPECIES_ID);
-  });
-
-  it('carries overflow into a new fry of spawnSpeciesId, not the target fish’s own species', () => {
-    const almostCapped: Fish = {
-      ...createFish(STARTER_SPECIES_ID, 0, 'almost'),
-      xp: GROWTH.xpPerStage - 10,
-    };
-
-    const result = applySessionReward({
-      fish: [almostCapped],
-      focusMs: 25 * MS_PER_MINUTE,
-      now: 0,
-      idFactory,
-      spawnSpeciesId: GOLDEN_KOI_SPECIES_ID,
-    });
-
-    const grown = result.fish.find((f) => f.id === 'almost')!;
-    const overflowFry = result.fish.find((f) => f.id === 'new-fish')!;
-    expect(grown.speciesId).toBe(STARTER_SPECIES_ID);
-    expect(grown.xp).toBe(GROWTH.xpPerStage);
-    expect(overflowFry.speciesId).toBe(GOLDEN_KOI_SPECIES_ID);
-    expect(overflowFry.xp).toBe(15);
+    expect(result.length).toBe('short');
+    expect(result.fish[0].stage).toBe('fry');
   });
 });
 
-describe('applySessionReward — XP overflow at the stage cap (M4)', () => {
-  const idFactory = () => 'new-fry';
+describe('applySessionReward — long session (at/above the threshold)', () => {
+  const idFactory = () => 'new-fish';
+  const pool = [STARTER_SPECIES_ID, GOLDEN_KOI_SPECIES_ID, INDIGO_BETTA_SPECIES_ID];
 
-  it('carries the remainder into a new fry instead of discarding it: 110/120 + 25 -> 120, fry at 15', () => {
-    const almostCapped: Fish = { ...createFish(STARTER_SPECIES_ID, 0, 'almost'), xp: GROWTH.xpPerStage - 10 };
-
+  it('hatches exactly one Juvenile, at exactly the threshold', () => {
     const result = applySessionReward({
-      fish: [almostCapped],
-      focusMs: 25 * MS_PER_MINUTE, // xpPerFocusMinute is 1 by default -> 25 XP awarded
-      now: 5000,
+      fish: [],
+      focusMs: REWARDS.longSessionThresholdMinutes * MS_PER_MINUTE,
+      now: 1000,
       idFactory,
+      activeSpeciesId: STARTER_SPECIES_ID,
+      ownedSpeciesIds: pool,
     });
 
-    expect(result.fish).toHaveLength(2);
-    const grown = result.fish.find((f) => f.id === 'almost')!;
-    const fry = result.fish.find((f) => f.id === 'new-fry')!;
-    expect(grown.xp).toBe(GROWTH.xpPerStage);
-    expect(fry.xp).toBe(15);
-    expect(fry.xp).not.toBe(0);
-    expect(fry).toMatchObject({ speciesId: STARTER_SPECIES_ID, stage: 'fry', bornAt: 5000, health: 'healthy' });
-  });
-
-  it('does not overflow at all when the award exactly fills the remaining room', () => {
-    const almostCapped: Fish = { ...createFish(STARTER_SPECIES_ID, 0, 'almost'), xp: GROWTH.xpPerStage - 25 };
-
-    const result = applySessionReward({
-      fish: [almostCapped],
-      focusMs: 25 * MS_PER_MINUTE,
-      now: 0,
-      idFactory,
-    });
-
+    expect(result.length).toBe('long');
     expect(result.fish).toHaveLength(1);
-    expect(result.fish[0].xp).toBe(GROWTH.xpPerStage);
-    expect(result.spawned).toBe(false);
+    expect(result.fish[0].stage).toBe('juvenile');
   });
 
-  it('spills overflow into a second under-cap fish rather than spawning, when one exists', () => {
-    const almostCapped: Fish = { ...createFish(STARTER_SPECIES_ID, 0, 'almost'), xp: GROWTH.xpPerStage - 10 };
-    const growing = createFish(STARTER_SPECIES_ID, 0, 'growing');
-
+  it('draws the species from the owned pool, not necessarily the active species', () => {
     const result = applySessionReward({
-      fish: [almostCapped, growing],
-      focusMs: 25 * MS_PER_MINUTE,
+      fish: [],
+      focusMs: 90 * MS_PER_MINUTE,
       now: 0,
       idFactory,
+      activeSpeciesId: STARTER_SPECIES_ID, // active species is the starter...
+      ownedSpeciesIds: pool,
+      random: () => 0.4, // ...but the draw picks the middle of the pool instead
     });
 
-    expect(result.fish).toHaveLength(2); // no new fry — the second fish absorbed the overflow
-    const grown = result.fish.find((f) => f.id === 'almost')!;
-    const spilled = result.fish.find((f) => f.id === 'growing')!;
-    expect(grown.xp).toBe(GROWTH.xpPerStage);
-    expect(spilled.xp).toBe(15);
+    expect(result.speciesId).toBe(GOLDEN_KOI_SPECIES_ID);
+    expect(result.fish[0].speciesId).toBe(GOLDEN_KOI_SPECIES_ID);
   });
 
-  it('chains overflow across multiple already-capped fish before finally spawning', () => {
-    const cappedA = addXp(createFish(STARTER_SPECIES_ID, 0, 'capped-a'), GROWTH.xpPerStage);
-    const almostB: Fish = { ...createFish(STARTER_SPECIES_ID, 0, 'almost-b'), xp: GROWTH.xpPerStage - 5 };
-
-    // 100 XP: capped-a is already full, so the selection rule skips straight past it to
-    // almost-b, which has 5 XP of room — it absorbs 5 and passes the remaining 95 on. With no
-    // under-cap fish left after that, the overflow hatches a fresh fry holding all 95.
-    const result = applySessionReward({
-      fish: [cappedA, almostB],
-      focusMs: 100 * MS_PER_MINUTE,
-      now: 9000,
-      idFactory,
-    });
-
-    expect(result.fish).toHaveLength(3);
-    const a = result.fish.find((f) => f.id === 'capped-a')!;
-    const b = result.fish.find((f) => f.id === 'almost-b')!;
-    const fry = result.fish.find((f) => f.id === 'new-fry')!;
-    expect(a.xp).toBe(GROWTH.xpPerStage);
-    expect(b.xp).toBe(GROWTH.xpPerStage);
-    expect(fry.xp).toBe(95);
-  });
-
-  it('cures a sick target fish by the mere act of growing it, even mid-overflow', () => {
-    const sickAlmostCapped: Fish = {
-      ...createFish(STARTER_SPECIES_ID, 0, 'sick-fish'),
-      xp: GROWTH.xpPerStage - 10,
-      health: 'sick',
-    };
-
-    const result = applySessionReward({
-      fish: [sickAlmostCapped],
-      focusMs: 25 * MS_PER_MINUTE,
-      now: 0,
-      idFactory,
-    });
-
-    const grown = result.fish.find((f) => f.id === 'sick-fish')!;
-    expect(grown.health).toBe('healthy');
-    expect(grown.xp).toBe(GROWTH.xpPerStage);
-  });
-
-  it('cures every sick fish the overflow chain grows, not just the first one it lands on', () => {
-    // Three sick fish, each 1 XP from its cap, and a 3 XP award — the chain touches all three.
-    // The naive version of this only cures the primary target and leaves the rest of the chain
-    // sick despite having just been grown by a completed session.
-    const sick = (id: string): Fish => ({
-      ...createFish(STARTER_SPECIES_ID, 0, id),
-      xp: GROWTH.xpPerStage - 1,
-      health: 'sick',
-    });
-
-    const result = applySessionReward({
-      fish: [sick('a'), sick('b'), sick('c')],
-      focusMs: 3 * MS_PER_MINUTE,
-      now: 0,
-      idFactory,
-    });
-
-    expect(result.fish).toHaveLength(3); // 3 XP exactly fills all three, nothing left to spawn
-    for (const f of result.fish) {
-      expect(f.xp).toBe(GROWTH.xpPerStage);
-      expect(f.health).toBe('healthy');
+  it('never picks a species outside ownedSpeciesIds, across many real-random calls', () => {
+    for (let i = 0; i < 200; i += 1) {
+      const result = applySessionReward({
+        fish: [],
+        focusMs: 60 * MS_PER_MINUTE,
+        now: 0,
+        idFactory,
+        activeSpeciesId: STARTER_SPECIES_ID,
+        ownedSpeciesIds: pool,
+      });
+      expect(pool).toContain(result.speciesId);
     }
   });
 
-  it('terminates and conserves XP on a long overflow chain, without recursing unboundedly', () => {
-    // The recursion's base case is "no fish has room", which hatches a fry that absorbs whatever
-    // is left. Every other step both consumes at least 1 XP and removes one fish from the
-    // under-cap set, so depth is bounded by the number of under-cap fish. This pins that: 60
-    // fish one XP short of their cap, and an award big enough to fill all of them and spill.
-    const nearlyFull = Array.from({ length: 60 }, (_, i) => ({
-      ...createFish(STARTER_SPECIES_ID, 0, `f${i}`),
-      xp: GROWTH.xpPerStage - 1,
-    }));
-    const startingXp = nearlyFull.reduce((sum, f) => sum + f.xp, 0);
+  it('is actually randomized across many calls — not always the same species', () => {
+    const seen = new Set(
+      Array.from({ length: 200 }, () =>
+        applySessionReward({
+          fish: [],
+          focusMs: 60 * MS_PER_MINUTE,
+          now: 0,
+          idFactory,
+          activeSpeciesId: STARTER_SPECIES_ID,
+          ownedSpeciesIds: pool,
+        }).speciesId,
+      ),
+    );
+    expect(seen.size).toBeGreaterThan(1);
+  });
 
+  it('draws from the full owned pool even when only one species is currently active', () => {
+    // Owning more species should matter for long sessions specifically, independent of which one
+    // is "active" — this pins that the pool passed in, not activeSpeciesId, drives the draw.
     const result = applySessionReward({
-      fish: nearlyFull,
-      focusMs: 75 * MS_PER_MINUTE, // 75 XP: 60 to top up every fish, 15 left for a new fry
+      fish: [],
+      focusMs: 60 * MS_PER_MINUTE,
       now: 0,
       idFactory,
+      activeSpeciesId: STARTER_SPECIES_ID,
+      ownedSpeciesIds: [INDIGO_BETTA_SPECIES_ID], // only species owned, and it's not active
+      random: () => 0,
     });
-
-    expect(result.fish).toHaveLength(61);
-    expect(result.fish.slice(0, 60).every((f) => f.xp === GROWTH.xpPerStage)).toBe(true);
-    expect(result.fish[60].xp).toBe(15);
-    // Nothing evaporated and nothing was conjured.
-    const endingXp = result.fish.reduce((sum, f) => sum + f.xp, 0);
-    expect(endingXp).toBe(startingXp + 75);
+    expect(result.speciesId).toBe(INDIGO_BETTA_SPECIES_ID);
   });
-});
 
-describe('distributeXp — exported directly for the debug panel (post-M6a review)', () => {
-  // The store's `debugGrantXp` action calls this function directly with a raw XP amount instead
-  // of routing an `xpForFocusMs`-derived value through `applySessionReward`. Pinning that
-  // `applySessionReward` is a thin wrapper around this exact function — not a second copy of the
-  // selection/overflow rule — so both callers are provably running the same logic.
-  const idFactory = () => 'new-fish';
-
-  it('produces the same result as applySessionReward for the equivalent xpForFocusMs output', () => {
-    const fish = [createFish(STARTER_SPECIES_ID, 0, 'existing')];
-    const xp = xpForFocusMs(25 * 60_000);
-
-    const viaApplySessionReward = applySessionReward({
-      fish,
-      focusMs: 25 * 60_000,
-      now: 5000,
+  it('does not mutate the input fish array', () => {
+    const input: Fish[] = [];
+    applySessionReward({
+      fish: input,
+      focusMs: 60 * MS_PER_MINUTE,
+      now: 0,
       idFactory,
+      activeSpeciesId: STARTER_SPECIES_ID,
+      ownedSpeciesIds: pool,
     });
-    const viaDistributeXp = distributeXp(fish, xp, 5000, idFactory, STARTER_SPECIES_ID);
-
-    expect(viaDistributeXp).toEqual({
-      fish: viaApplySessionReward.fish,
-      awardedFishId: viaApplySessionReward.awardedFishId,
-      spawned: viaApplySessionReward.spawned,
-    });
-  });
-
-  it('grows the current growth-target fish directly given a raw XP amount', () => {
-    const growing = createFish(STARTER_SPECIES_ID, 0, 'growing');
-    const result = distributeXp([growing], 75, 0, idFactory, STARTER_SPECIES_ID);
-
-    expect(result.fish[0].xp).toBe(75);
-    expect(result.awardedFishId).toBe('growing');
-    expect(result.spawned).toBe(false);
+    expect(input).toEqual([]);
   });
 });

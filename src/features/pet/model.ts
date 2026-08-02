@@ -1,12 +1,16 @@
 /**
  * The pet/zoo domain model (docs/PLAN.md M2). Pure TypeScript — no React/RN/Skia imports — so
- * every rule here (what a fresh fish looks like, how XP accrues) is unit-testable without a
- * renderer, same discipline as `src/features/timer/machine.ts`.
+ * every rule here (what a fresh fish looks like, which stage it hatches at) is unit-testable
+ * without a renderer, same discipline as `src/features/timer/machine.ts`.
  *
  * `Fish` is the type persisted in `src/store` (`PersistedState.fish`); `store/types.ts`
- * re-exports it from here rather than defining a second copy.
+ * re-exports it from here rather than defining a second copy. As of the post-M6a reward
+ * rearchitecture (see CLAUDE.md), `Fish` no longer carries an `xp` field: a completed session
+ * hatches a fish directly onto a stage (`src/features/pet/reward.ts`) instead of growing one
+ * toward a stage cap, so there is nothing left for XP to represent. Only a merge
+ * (`src/features/pet/merge.ts`) advances a fish's stage from here on.
  */
-import { GROWTH, STAGES, type StageId } from '@/config';
+import { STAGES, type StageId } from '@/config';
 
 export type SpeciesId = string;
 export type FishHealth = 'healthy' | 'sick';
@@ -16,8 +20,6 @@ export interface Fish {
   id: string;
   speciesId: SpeciesId;
   stage: StageId;
-  /** XP accrued *within* the current stage. Never crosses a stage on its own — merging does. */
-  xp: number;
   bornAt: number;
   health: FishHealth;
 }
@@ -222,9 +224,20 @@ export function getSpecies(id: SpeciesId): Species {
   return SPECIES[id] ?? STARTER_SPECIES;
 }
 
-/** A freshly hatched fish: stage 1 (Fry), no XP, healthy. */
+/** A freshly hatched fish at a specific stage, healthy, born now. Every hatch in the app — a
+ *  completed session or a debug-panel action — goes through this or `createFish` below, or
+ *  `merge.ts`'s own next-stage construction; never a second inline `{ id, speciesId, stage, ... }`
+ *  literal (see `reward.ts`'s `hatchFish`, the one hatch primitive). */
+export function createFishAtStage(speciesId: SpeciesId, stage: StageId, bornAt: number, id: string): Fish {
+  return { id, speciesId, stage, bornAt, health: 'healthy' };
+}
+
+/** A freshly hatched Fry. Kept as a convenience wrapper over `createFishAtStage` for callers that
+ *  specifically want the entry stage — since the post-M6a reward rearchitecture, *which* stage a
+ *  session hatches is itself a decision (`reward.ts`'s short/long rule), so not every hatch wants
+ *  a Fry. */
 export function createFish(speciesId: SpeciesId, bornAt: number, id: string): Fish {
-  return { id, speciesId, stage: STAGES[0], xp: 0, bornAt, health: 'healthy' };
+  return createFishAtStage(speciesId, STAGES[0], bornAt, id);
 }
 
 export function stageIndex(stage: StageId): number {
@@ -235,28 +248,9 @@ export function isMaxStage(stage: StageId): boolean {
   return stageIndex(stage) === STAGES.length - 1;
 }
 
-/** The next stage up, or `null` if already at the top — crossing it is a merge (M3), not XP. */
+/** The next stage up, or `null` if already at the top — crossing it is a merge (M3), the only way
+ *  left in the app for a fish to advance. */
 export function nextStage(stage: StageId): StageId | null {
   const next = STAGES[stageIndex(stage) + 1];
   return next ?? null;
-}
-
-/** Add XP to a fish, clamped to the stage cap. Growth never crosses a stage on its own — once a
- *  fish is capped it just holds there until a merge (M3) advances it. */
-export function addXp(fish: Fish, amount: number): Fish {
-  if (amount <= 0) return fish;
-  const xp = Math.min(GROWTH.xpPerStage, fish.xp + amount);
-  if (xp === fish.xp) return fish;
-  return { ...fish, xp };
-}
-
-/** 0…1 fill fraction of the current stage's XP bar. */
-export function stageProgress(fish: Fish): number {
-  if (GROWTH.xpPerStage <= 0) return 0;
-  return Math.min(1, Math.max(0, fish.xp / GROWTH.xpPerStage));
-}
-
-/** True once a fish has filled its stage bar and is waiting on a merge to advance (M3). */
-export function isReadyToMerge(fish: Fish): boolean {
-  return fish.xp >= GROWTH.xpPerStage;
 }

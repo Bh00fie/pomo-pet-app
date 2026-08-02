@@ -1,34 +1,50 @@
-import { GROWTH, SHOP, STAGES } from '@/config';
+import { SHOP, STAGES } from '@/config';
 import {
-  addXp,
   createFish,
+  createFishAtStage,
   getSpecies,
   GOLDEN_KOI_SPECIES_ID,
   INDIGO_BETTA_SPECIES_ID,
   SHARK_SPECIES_ID,
   CLOWNFISH_SPECIES_ID,
   isMaxStage,
-  isReadyToMerge,
   nextStage,
   SPECIES,
   SPECIES_ORDER,
   stageIndex,
-  stageProgress,
   STARTER_SPECIES_ID,
   type Fish,
 } from '../model';
 
 describe('createFish', () => {
-  it('hatches at the first stage, zero XP, healthy', () => {
+  it('hatches at the first stage, healthy', () => {
     const fish = createFish(STARTER_SPECIES_ID, 1000, 'fish-1');
     expect(fish).toEqual<Fish>({
       id: 'fish-1',
       speciesId: STARTER_SPECIES_ID,
       stage: STAGES[0],
-      xp: 0,
       bornAt: 1000,
       health: 'healthy',
     });
+  });
+});
+
+describe('createFishAtStage', () => {
+  it('hatches at the given stage, healthy — the primitive every hatch path goes through', () => {
+    const fish = createFishAtStage(STARTER_SPECIES_ID, 'juvenile', 1000, 'fish-1');
+    expect(fish).toEqual<Fish>({
+      id: 'fish-1',
+      speciesId: STARTER_SPECIES_ID,
+      stage: 'juvenile',
+      bornAt: 1000,
+      health: 'healthy',
+    });
+  });
+
+  it('createFish is exactly createFishAtStage pinned to the first stage', () => {
+    expect(createFish(STARTER_SPECIES_ID, 5, 'x')).toEqual(
+      createFishAtStage(STARTER_SPECIES_ID, STAGES[0], 5, 'x'),
+    );
   });
 });
 
@@ -188,51 +204,3 @@ describe('stage helpers', () => {
   });
 });
 
-describe('addXp', () => {
-  const base = createFish(STARTER_SPECIES_ID, 0, 'f1');
-
-  it('adds XP', () => {
-    const grown = addXp(base, 10);
-    expect(grown.xp).toBe(10);
-  });
-
-  it('does not mutate the input fish', () => {
-    const grown = addXp(base, 10);
-    expect(base.xp).toBe(0);
-    expect(grown).not.toBe(base);
-  });
-
-  it('clamps at GROWTH.xpPerStage — growth never crosses a stage on its own', () => {
-    const almostFull = { ...base, xp: GROWTH.xpPerStage - 5 };
-    const grown = addXp(almostFull, 1000);
-    expect(grown.xp).toBe(GROWTH.xpPerStage);
-    expect(grown.stage).toBe(almostFull.stage);
-  });
-
-  it('is a no-op for zero or negative amounts, returning the same reference', () => {
-    expect(addXp(base, 0)).toBe(base);
-    expect(addXp(base, -5)).toBe(base);
-  });
-
-  it('returns the same reference when already at the cap (no-op update)', () => {
-    const capped = { ...base, xp: GROWTH.xpPerStage };
-    expect(addXp(capped, 10)).toBe(capped);
-  });
-});
-
-describe('stageProgress / isReadyToMerge', () => {
-  it('reports 0 for a fresh fish and 1 at the cap', () => {
-    const fresh = createFish(STARTER_SPECIES_ID, 0, 'f1');
-    expect(stageProgress(fresh)).toBe(0);
-    expect(isReadyToMerge(fresh)).toBe(false);
-
-    const capped = addXp(fresh, GROWTH.xpPerStage);
-    expect(stageProgress(capped)).toBe(1);
-    expect(isReadyToMerge(capped)).toBe(true);
-  });
-
-  it('is proportional between 0 and the cap', () => {
-    const half = addXp(createFish(STARTER_SPECIES_ID, 0, 'f1'), GROWTH.xpPerStage / 2);
-    expect(stageProgress(half)).toBeCloseTo(0.5);
-  });
-});

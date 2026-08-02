@@ -8,7 +8,7 @@ import type { PersistedState } from './types';
  * matching entry to `migrations`. Versioned from commit one on purpose (docs/PLAN.md M0) —
  * retrofitting migrations onto already-shipped user data is the expensive version of this problem.
  */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 /** The placeholder species id shipped in the v1 default `entitlements.unlockedSpeciesIds`. It
  *  never matched a real species — the species catalog did not exist until M2 — so any stored copy
@@ -101,6 +101,26 @@ export const migrations: Record<number, Migration> = {
             : STARTER_SPECIES_ID,
       },
     };
+  },
+
+  /**
+   * v4 → v5 (post-M6a reward rearchitecture — see CLAUDE.md). `Fish.xp` is removed entirely: a
+   * completed session now hatches a fish directly onto a stage (`src/features/pet/reward.ts`)
+   * instead of growing one's XP toward a stage cap, so nothing reads the field anymore. Drop it
+   * from every persisted fish rather than leaving a dead number in storage that nothing produces
+   * or consumes again — `persist`'s shallow merge would otherwise let a stale `xp` value survive
+   * indefinitely on an existing fish.
+   */
+  4: (state) => {
+    if (typeof state !== 'object' || state === null) return state;
+    const s = state as Record<string, unknown>;
+    const storedFish = Array.isArray(s.fish) ? s.fish : [];
+    const fish = storedFish.map((f) => {
+      if (typeof f !== 'object' || f === null) return f;
+      const { xp: _xp, ...rest } = f as Record<string, unknown>;
+      return rest;
+    });
+    return { ...s, fish };
   },
 };
 

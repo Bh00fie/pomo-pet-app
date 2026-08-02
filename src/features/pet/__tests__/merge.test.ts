@@ -166,7 +166,7 @@ describe('evaluateMerge', () => {
     ).not.toThrow();
   });
 
-  it('merges three Fry into one Juvenile at 0 XP', () => {
+  it('merges three Fry into one Juvenile', () => {
     const fish = [fry('a'), fry('b'), fry('c')];
     const result = evaluateMerge({ fish, selectedIds: ['a', 'b', 'c'], now: 5000, idFactory });
 
@@ -177,7 +177,6 @@ describe('evaluateMerge', () => {
       id: 'merged-fish',
       speciesId: STARTER_SPECIES_ID,
       stage: 'juvenile',
-      xp: 0,
       bornAt: 5000,
       health: 'healthy',
     });

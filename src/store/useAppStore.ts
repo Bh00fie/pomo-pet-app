@@ -1,24 +1,26 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import { APP, GROWTH, TIMER } from '@/config';
+import { APP, TIMER } from '@/config';
 // Submodule imports (not the `@/features/pet` barrel) — the barrel re-exports `useSessionReward`,
 // which imports this store, and going through it here would create a module-load cycle.
 import { generateFishId } from '@/features/pet/id';
 import { evaluateMerge, type MergeResult } from '@/features/pet/merge';
-import { addXp, createFish, STARTER_SPECIES_ID, type SpeciesId } from '@/features/pet/model';
+import { STARTER_SPECIES_ID, type SpeciesId } from '@/features/pet/model';
 import { applyPenalty } from '@/features/pet/penalty';
-import { applySessionReward, distributeXp } from '@/features/pet/reward';
+import { applySessionReward, hatchFish, pickRandomSpeciesId } from '@/features/pet/reward';
 import { applyCompletedSessionToStreak, toLocalDateString } from '@/features/streak';
 import { SCHEMA_VERSION, migrate } from './migrations';
 import { asyncStorageJSON } from './storage';
 import type { PersistedState, Settings } from './types';
 
 /**
- * The species a fresh Fry hatches as (docs/PLAN.md M6a): the user's chosen `activeSpeciesId`,
- * re-validated against `entitlements.unlockedSpeciesIds` on every call rather than trusted as
- * stored, falling back to the starter. Factored out of `awardSessionCompletion` so the debug
- * panel's "Spawn fish" action reuses this exact resolution instead of a second copy of it.
+ * The species a short session's Fry hatches as (docs/PLAN.md M6a): the user's chosen
+ * `activeSpeciesId`, re-validated against `entitlements.unlockedSpeciesIds` on every call rather
+ * than trusted as stored, falling back to the starter. Factored out of `awardSessionCompletion` so
+ * the debug panel's "Hatch a Fry" action reuses this exact resolution instead of a second copy of
+ * it. A long session's Juvenile does not use this at all — see `pickRandomSpeciesId` in
+ * `reward.ts`, which draws from the *whole* owned pool instead.
  */
 function resolveSpawnSpeciesId(s: Pick<AppStore, 'settings' | 'entitlements'>): SpeciesId {
   return s.entitlements.unlockedSpeciesIds.includes(s.settings.activeSpeciesId)
@@ -29,14 +31,16 @@ function resolveSpawnSpeciesId(s: Pick<AppStore, 'settings' | 'entitlements'>): 
 interface AppActions {
   setSettings: (patch: Partial<Settings>) => void;
   completeOnboarding: () => void;
-  /** Applies one focus session's reward (docs/PLAN.md M2): grows an existing fish's XP, or
-   *  spawns a starter Fry if the user has none yet. Called by `useSessionReward` on the timer
-   *  engine's `completed` transition. */
+  /** Applies one focus session's reward (docs/PLAN.md M2, rearchitected post-M6a — see
+   *  CLAUDE.md): hatches exactly one new fish, never grows an existing one. A short session
+   *  hatches a Fry of the active species; a long session (>= `REWARDS.longSessionThresholdMinutes`)
+   *  hatches a Juvenile of a species drawn at random from everything the user owns. Called by
+   *  `useSessionReward` on the timer engine's `completed` transition. */
   awardSessionCompletion: (focusMs: number, now: number) => void;
   /**
-   * Applies the M4 leave-early penalty (docs/PLAN.md M4): marks the same fish a completed
-   * session would have grown as `sick` instead, and counts the session as abandoned in stats.
-   * Called from `useLeaveEarlyPenalty` exactly when the timer engine auto-abandons a running
+   * Applies the M4 leave-early penalty (docs/PLAN.md M4): marks a fish `sick` (see `penalty.ts`
+   * for which one, updated post-reward-rearchitecture) and counts the session as abandoned in
+   * stats. Called from `useLeaveEarlyPenalty` exactly when the timer engine auto-abandons a running
    * session for staying backgrounded past `ACCOUNTABILITY.backgroundGraceMs` — never for a
    * manual "Give up", which has its own counter-only action below.
    */
@@ -85,34 +89,24 @@ interface AppActions {
   /** Test/dev affordance — wipes persisted state back to defaults. */
   resetAll: () => void;
 
-  // --- Debug-only actions (added post-M6a review) ---------------------------------------------
-  // TODO: remove or gate before EAS build submission. These exist only so the real pacing in
-  // `GROWTH` (untouched — see CLAUDE.md "THE BIG ONE AT THE GATE") doesn't block the user from
-  // actually reaching merge and a purchased species during on-device testing. Each one calls
-  // straight into the same pure functions the real reward/spawn flow uses
-  // (`distributeXp`/`addXp`/`createFish`) — never a parallel simulation of them.
+  // --- Debug-only actions (added post-M6a review; updated for the reward rearchitecture) -------
+  // TODO: remove or gate before EAS build submission. These exist only so the debug affordance
+  // that makes merge and species variety reachable during on-device testing survives the XP
+  // model's removal. Each one calls straight into the same hatch primitive (`hatchFish` from
+  // `reward.ts`) the real session-completion path uses — never a parallel simulation of it.
   /**
-   * Grants `xp` to the current active-growth-target fish via the exact same `distributeXp`
-   * selection/overflow logic `awardSessionCompletion` uses — the only difference is the XP comes
-   * from a raw number instead of `xpForFocusMs(focusMs)`. Deliberately does **not** touch stats
-   * or the streak (unlike `awardSessionCompletion`): this is a shortcut through the reward
-   * *distribution* rule, not a fake extra session.
+   * Hatches one Fry of the resolved active species (`resolveSpawnSpeciesId`) — the same
+   * stage+species a real short focus session produces. Press it `GROWTH.fishPerMerge` times to
+   * assemble a mergeable trio without waiting on real sessions.
    */
-  debugGrantXp: (xp: number, now: number) => void;
+  debugHatchFry: (now: number) => void;
   /**
-   * Instantly sets every existing fish's `xp` to its stage cap via `addXp` (the same clamp the
-   * real reward path uses), so a merge becomes available without waiting through real sessions.
-   * Never touches `health` — capping a fish is not a way to cure it; that stays exclusive to
-   * being picked as a real grow target.
+   * Hatches one Juvenile of a species drawn uniformly at random from every species the user owns
+   * — the same stage+species-selection rule a real long focus session produces
+   * (`applySessionReward`'s long branch), via the same `pickRandomSpeciesId` + `hatchFish`
+   * primitives.
    */
-  debugCapAllFish: () => void;
-  /**
-   * Hatches one fresh Fry of the resolved active species via the same `createFish` primitive
-   * `distributeXp`'s spawn branch calls, unconditionally rather than only when every fish is
-   * capped — so a just-purchased species can be seen immediately instead of waiting on the real
-   * M3 spawn rule.
-   */
-  debugSpawnFish: (now: number) => void;
+  debugHatchJuvenile: (now: number) => void;
 }
 
 export type AppStore = PersistedState & {
@@ -162,14 +156,15 @@ export const useAppStore = create<AppStore>()(
           // ownership on every call, not just when it's set (`setActiveSpecies` already guards
           // its own write) — a species could stop being owned by some future path this store
           // doesn't have yet (e.g. a refund), and a stale unowned id must never reach `reward.ts`.
-          const spawnSpeciesId = resolveSpawnSpeciesId(s);
+          const activeSpeciesId = resolveSpawnSpeciesId(s);
 
           const result = applySessionReward({
             fish: s.fish,
             focusMs,
             now,
             idFactory: () => generateFishId(now),
-            spawnSpeciesId,
+            activeSpeciesId,
+            ownedSpeciesIds: s.entitlements.unlockedSpeciesIds,
           });
 
           // Streak + basic stats update alongside the fish reward, in the same `set` — one
@@ -253,23 +248,20 @@ export const useAppStore = create<AppStore>()(
 
       resetAll: () => set({ ...initialPersisted }),
 
-      // --- Debug-only actions (added post-M6a review) ------------------------------------------
+      // --- Debug-only actions (added post-M6a review; updated for the reward rearchitecture) ---
       // TODO: remove or gate before EAS build submission.
-      debugGrantXp: (xp, now) =>
+      debugHatchFry: (now) =>
         set((s) => {
-          const spawnSpeciesId = resolveSpawnSpeciesId(s);
-          const result = distributeXp(s.fish, xp, now, () => generateFishId(now), spawnSpeciesId);
+          const activeSpeciesId = resolveSpawnSpeciesId(s);
+          const result = hatchFish(s.fish, 'fry', activeSpeciesId, now, () => generateFishId(now));
           return { fish: result.fish };
         }),
 
-      debugCapAllFish: () =>
-        set((s) => ({ fish: s.fish.map((f) => addXp(f, GROWTH.xpPerStage)) })),
-
-      debugSpawnFish: (now) =>
+      debugHatchJuvenile: (now) =>
         set((s) => {
-          const spawnSpeciesId = resolveSpawnSpeciesId(s);
-          const hatched = createFish(spawnSpeciesId, now, generateFishId(now));
-          return { fish: [...s.fish, hatched] };
+          const speciesId = pickRandomSpeciesId(s.entitlements.unlockedSpeciesIds);
+          const result = hatchFish(s.fish, 'juvenile', speciesId, now, () => generateFishId(now));
+          return { fish: result.fish };
         }),
     }),
     {
@@ -299,9 +291,9 @@ export const selectStats = (s: AppStore) => s.stats;
 export const selectFish = (s: AppStore) => s.fish;
 export const selectHydrated = (s: AppStore) => s.hydrated;
 /**
- * The species a fresh Fry would hatch as right now — the same entitlement-validated resolution
- * `awardSessionCompletion`/`debugSpawnFish` use, exposed so UI that *names* that species can
- * never disagree with what the action actually spawns. (Reading `settings.activeSpeciesId`
+ * The species a short session's Fry would hatch as right now — the same entitlement-validated
+ * resolution `awardSessionCompletion`/`debugHatchFry` use, exposed so UI that *names* that species
+ * can never disagree with what the action actually hatches. (Reading `settings.activeSpeciesId`
  * directly would: it is the one settings field that can name a species the user does not own.)
  */
 export const selectSpawnSpeciesId = (s: AppStore) => resolveSpawnSpeciesId(s);

@@ -1,5 +1,4 @@
-import { GROWTH } from '@/config';
-import { addXp, createFish, STARTER_SPECIES_ID, type Fish } from '../model';
+import { createFish, STARTER_SPECIES_ID, type Fish } from '../model';
 import { applyPenalty } from '../penalty';
 
 describe('applyPenalty', () => {
@@ -9,28 +8,27 @@ describe('applyPenalty', () => {
     expect(result.fish).toEqual([]);
   });
 
-  it('marks the first fish with room in its stage as sick — same selection as the reward rule', () => {
-    const capped = addXp(createFish(STARTER_SPECIES_ID, 0, 'capped'), GROWTH.xpPerStage);
-    const growing = createFish(STARTER_SPECIES_ID, 0, 'growing');
+  it('marks the most recently hatched fish as sick — the closest surviving analogue to '
+    + '"the fish this session would have produced" now that sessions only ever hatch, never grow', () => {
+    const older = createFish(STARTER_SPECIES_ID, 1000, 'older');
+    const newer = createFish(STARTER_SPECIES_ID, 2000, 'newer');
 
-    const result = applyPenalty({ fish: [capped, growing] });
+    const result = applyPenalty({ fish: [older, newer] });
 
-    expect(result.sickenedFishId).toBe('growing');
-    const updatedCapped = result.fish.find((f) => f.id === 'capped')!;
-    const updatedGrowing = result.fish.find((f) => f.id === 'growing')!;
-    expect(updatedCapped.health).toBe('healthy'); // untouched — it was never the target
-    expect(updatedGrowing.health).toBe('sick');
+    expect(result.sickenedFishId).toBe('newer');
+    const updatedOlder = result.fish.find((f) => f.id === 'older')!;
+    const updatedNewer = result.fish.find((f) => f.id === 'newer')!;
+    expect(updatedOlder.health).toBe('healthy'); // untouched — it was never the target
+    expect(updatedNewer.health).toBe('sick');
   });
 
-  it('is a no-op when every fish is already capped — nothing this session would have grown', () => {
-    const cappedA = addXp(createFish(STARTER_SPECIES_ID, 0, 'a'), GROWTH.xpPerStage);
-    const cappedB = addXp(createFish(STARTER_SPECIES_ID, 0, 'b'), GROWTH.xpPerStage);
+  it('picks the most recent regardless of array order', () => {
+    const newer = createFish(STARTER_SPECIES_ID, 2000, 'newer');
+    const older = createFish(STARTER_SPECIES_ID, 1000, 'older');
 
-    const result = applyPenalty({ fish: [cappedA, cappedB] });
+    const result = applyPenalty({ fish: [newer, older] }); // newest listed first this time
 
-    expect(result.sickenedFishId).toBeNull();
-    expect(result.fish[0].health).toBe('healthy');
-    expect(result.fish[1].health).toBe('healthy');
+    expect(result.sickenedFishId).toBe('newer');
   });
 
   it('is idempotent when the target is already sick, returning the same fish array reference', () => {
@@ -44,12 +42,12 @@ describe('applyPenalty', () => {
   });
 
   it('does not mutate the input fish array or its members', () => {
-    const growing = createFish(STARTER_SPECIES_ID, 0, 'growing');
-    const input = [growing];
+    const fish = createFish(STARTER_SPECIES_ID, 0, 'growing');
+    const input = [fish];
 
     applyPenalty({ fish: input });
 
     expect(input[0].health).toBe('healthy');
-    expect(growing.health).toBe('healthy');
+    expect(fish.health).toBe('healthy');
   });
 });

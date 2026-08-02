@@ -48,13 +48,24 @@ export const ACCOUNTABILITY = {
 } as const;
 
 export const GROWTH = {
-  /** XP awarded per completed minute of focus. This is the whole session→reward formula for M2 —
-   *  see `src/features/pet/reward.ts`, which is the only place that reads it. */
-  xpPerFocusMinute: 1,
-  /** XP needed to fill a stage bar. Filling it does NOT cross a stage — merging does. */
-  xpPerStage: 120,
   /** How many same-stage fish must be merged to cross a stage boundary. */
   fishPerMerge: 3,
+} as const;
+
+export const REWARDS = {
+  /**
+   * Minute threshold at/above which a completed focus session hatches a Juvenile instead of a
+   * Fry (post-XP reward rearchitecture — see CLAUDE.md, `src/features/pet/reward.ts`). Every
+   * completed session hatches exactly one new fish now — never grows an existing one — so
+   * duration alone decides the stage: below this, a Fry of the active species; at/above it, a
+   * Juvenile of a species drawn at random from everything the user owns.
+   *
+   * `TIMER.minMinutes`/`maxMinutes` are 5/90, so the true midpoint is 47.5 — not a value a user
+   * can actually select on the `stepMinutes` (5) grid. 50 is the nearest grid value, and it also
+   * happens to split the 18 selectable durations (5,10,…,90) exactly evenly: 9 short (5–45),
+   * 9 long (50–90). 45 would split them 8/10.
+   */
+  longSessionThresholdMinutes: 50,
 } as const;
 
 export const HEALTH = {

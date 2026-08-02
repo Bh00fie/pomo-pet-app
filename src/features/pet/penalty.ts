@@ -7,8 +7,14 @@
  * A session that is merely abandoned already earns no reward on its own — `useSessionReward`
  * only fires on `completed`. The punishment here is additive: actively marking a fish `sick`,
  * not just withholding growth.
+ *
+ * Post-reward-rearchitecture note (see CLAUDE.md): a completed session no longer "grows" any
+ * particular existing fish — every completed session always hatches a brand-new one instead
+ * (`reward.ts`) — so there is no more "the fish this session would have grown" target to reuse,
+ * which is what this rule used to do. The target is now the most recently hatched fish in the
+ * collection (max `bornAt`): the closest surviving analogue, since it is the thing a completed
+ * session would most recently have added to.
  */
-import { GROWTH } from '@/config';
 import type { Fish } from './model';
 
 export interface PenaltyInput {
@@ -18,21 +24,19 @@ export interface PenaltyInput {
 export interface PenaltyResult {
   fish: Fish[];
   /** Id of the fish that was marked sick, or `null` if there was nothing to penalize (no fish
-   *  yet, or every fish already capped — the same "first fish with room" selection used for
-   *  rewards, reused rather than reinvented). Also `null`-free but a no-op when the selected
-   *  fish was already sick. */
+   *  yet — an empty collection is the only no-op case now that there is no stage cap to be
+   *  "waiting" on). Also non-null but a no-op when the selected fish was already sick. */
   sickenedFishId: string | null;
 }
 
 /**
- * Marks the same fish a completed session would have grown as `sick` instead. Never mutates its
- * input, never throws. A collection with no growable fish (empty, or every fish already capped)
- * is a valid no-op — there is nothing this session would have grown, so there is nothing to
- * punish by harming instead.
+ * Marks the most recently hatched fish as `sick`. Never mutates its input, never throws. An empty
+ * collection is a valid no-op — there is nothing to punish.
  */
 export function applyPenalty(input: PenaltyInput): PenaltyResult {
-  const target = input.fish.find((f) => f.xp < GROWTH.xpPerStage);
-  if (!target) return { fish: input.fish, sickenedFishId: null };
+  if (input.fish.length === 0) return { fish: input.fish, sickenedFishId: null };
+
+  const target = input.fish.reduce((latest, f) => (f.bornAt > latest.bornAt ? f : latest));
   if (target.health === 'sick') return { fish: input.fish, sickenedFishId: target.id };
 
   const fish = input.fish.map((f) => (f.id === target.id ? { ...f, health: 'sick' as const } : f));
