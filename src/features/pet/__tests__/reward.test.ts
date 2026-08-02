@@ -186,8 +186,9 @@ describe('applySessionReward — XP overflow at the stage cap (M4)', () => {
     const cappedA = addXp(createFish(STARTER_SPECIES_ID, 0, 'capped-a'), GROWTH.xpPerStage);
     const almostB: Fish = { ...createFish(STARTER_SPECIES_ID, 0, 'almost-b'), xp: GROWTH.xpPerStage - 5 };
 
-    // 100 XP: capped-a is already full (0 room, all 100 overflow immediately); almost-b has 5
-    // XP of room, absorbing 5 and passing on 95 to a freshly hatched fry.
+    // 100 XP: capped-a is already full, so the selection rule skips straight past it to
+    // almost-b, which has 5 XP of room — it absorbs 5 and passes the remaining 95 on. With no
+    // under-cap fish left after that, the overflow hatches a fresh fry holding all 95.
     const result = applySessionReward({
       fish: [cappedA, almostB],
       focusMs: 100 * MS_PER_MINUTE,
@@ -221,5 +222,55 @@ describe('applySessionReward — XP overflow at the stage cap (M4)', () => {
     const grown = result.fish.find((f) => f.id === 'sick-fish')!;
     expect(grown.health).toBe('healthy');
     expect(grown.xp).toBe(GROWTH.xpPerStage);
+  });
+
+  it('cures every sick fish the overflow chain grows, not just the first one it lands on', () => {
+    // Three sick fish, each 1 XP from its cap, and a 3 XP award — the chain touches all three.
+    // The naive version of this only cures the primary target and leaves the rest of the chain
+    // sick despite having just been grown by a completed session.
+    const sick = (id: string): Fish => ({
+      ...createFish(STARTER_SPECIES_ID, 0, id),
+      xp: GROWTH.xpPerStage - 1,
+      health: 'sick',
+    });
+
+    const result = applySessionReward({
+      fish: [sick('a'), sick('b'), sick('c')],
+      focusMs: 3 * MS_PER_MINUTE,
+      now: 0,
+      idFactory,
+    });
+
+    expect(result.fish).toHaveLength(3); // 3 XP exactly fills all three, nothing left to spawn
+    for (const f of result.fish) {
+      expect(f.xp).toBe(GROWTH.xpPerStage);
+      expect(f.health).toBe('healthy');
+    }
+  });
+
+  it('terminates and conserves XP on a long overflow chain, without recursing unboundedly', () => {
+    // The recursion's base case is "no fish has room", which hatches a fry that absorbs whatever
+    // is left. Every other step both consumes at least 1 XP and removes one fish from the
+    // under-cap set, so depth is bounded by the number of under-cap fish. This pins that: 60
+    // fish one XP short of their cap, and an award big enough to fill all of them and spill.
+    const nearlyFull = Array.from({ length: 60 }, (_, i) => ({
+      ...createFish(STARTER_SPECIES_ID, 0, `f${i}`),
+      xp: GROWTH.xpPerStage - 1,
+    }));
+    const startingXp = nearlyFull.reduce((sum, f) => sum + f.xp, 0);
+
+    const result = applySessionReward({
+      fish: nearlyFull,
+      focusMs: 75 * MS_PER_MINUTE, // 75 XP: 60 to top up every fish, 15 left for a new fry
+      now: 0,
+      idFactory,
+    });
+
+    expect(result.fish).toHaveLength(61);
+    expect(result.fish.slice(0, 60).every((f) => f.xp === GROWTH.xpPerStage)).toBe(true);
+    expect(result.fish[60].xp).toBe(15);
+    // Nothing evaporated and nothing was conjured.
+    const endingXp = result.fish.reduce((sum, f) => sum + f.xp, 0);
+    expect(endingXp).toBe(startingXp + 75);
   });
 });

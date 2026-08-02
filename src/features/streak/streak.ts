@@ -68,7 +68,10 @@ export function applyCompletedSessionToStreak(input: StreakInput): StreakResult 
 
   let currentStreak: number;
   if (dayDiff === 0) {
-    currentStreak = input.currentStreak;
+    // A second session today doesn't double-count. The floor of 1 is for the otherwise
+    // unrepresentable state of "a session is recorded for today, but the streak says zero" —
+    // a completed session can never leave the streak at 0.
+    currentStreak = Math.max(1, input.currentStreak);
   } else if (dayDiff === 1) {
     currentStreak = input.currentStreak + 1;
   } else {

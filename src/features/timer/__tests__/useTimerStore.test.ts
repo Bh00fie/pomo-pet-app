@@ -208,6 +208,17 @@ describe('noteBackgrounded / resolveForeground (docs/PLAN.md M4 leave-early pena
     expect(useTimerStore.getState().backgroundedAt).toBeNull(); // cleared regardless
   });
 
+  it('treats an excursion of exactly backgroundGraceMs as still inside the grace period', () => {
+    // Pinning the boundary: the comparison is `elapsed <= grace`, so the grace period is
+    // inclusive. Landing exactly on it is forgiven; one millisecond past it is not (below).
+    useTimerStore.getState().start();
+    useTimerStore.getState().noteBackgrounded(NOW + 1_000);
+    useTimerStore.getState().resolveForeground(NOW + 1_000 + ACCOUNTABILITY.backgroundGraceMs);
+
+    expect(useTimerStore.getState().timer.status).toBe('running');
+    expect(useTimerStore.getState().lastPenaltyToken).toBe(0);
+  });
+
   it('auto-abandons and bumps lastPenaltyToken once the grace period is exceeded', async () => {
     useTimerStore.getState().start();
     await flush();
