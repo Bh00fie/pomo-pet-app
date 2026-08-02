@@ -298,3 +298,10 @@ export const selectSettings = (s: AppStore) => s.settings;
 export const selectStats = (s: AppStore) => s.stats;
 export const selectFish = (s: AppStore) => s.fish;
 export const selectHydrated = (s: AppStore) => s.hydrated;
+/**
+ * The species a fresh Fry would hatch as right now — the same entitlement-validated resolution
+ * `awardSessionCompletion`/`debugSpawnFish` use, exposed so UI that *names* that species can
+ * never disagree with what the action actually spawns. (Reading `settings.activeSpeciesId`
+ * directly would: it is the one settings field that can name a species the user does not own.)
+ */
+export const selectSpawnSpeciesId = (s: AppStore) => resolveSpawnSpeciesId(s);

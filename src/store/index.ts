@@ -4,6 +4,7 @@ export {
   selectStats,
   selectFish,
   selectHydrated,
+  selectSpawnSpeciesId,
 } from './useAppStore';
 export type { AppStore } from './useAppStore';
 export { SCHEMA_VERSION, migrate, migrations } from './migrations';
