@@ -1,4 +1,4 @@
-import { StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { APP } from '@/config';
 import { useAppStore } from '@/store';
@@ -33,7 +33,11 @@ export function OnboardingScreen() {
 
   return (
     <Screen>
-      <View style={styles.body}>
+      <ScrollView
+        style={styles.body}
+        contentContainerStyle={styles.bodyContent}
+        showsVerticalScrollIndicator={false}
+      >
         <Text variant="caption" color="textMuted">
           WELCOME TO
         </Text>
@@ -52,7 +56,7 @@ export function OnboardingScreen() {
             </Card>
           ))}
         </View>
-      </View>
+      </ScrollView>
 
       <Button label="Get started" onPress={completeOnboarding} style={styles.cta} />
     </Screen>
@@ -60,7 +64,11 @@ export function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
-  body: { flex: 1, justifyContent: 'center', gap: spacing.sm },
+  // Scrollable rather than a fixed centered block — four cards plus intro copy should fit most
+  // screens without scrolling, but nothing here should be able to clip content off-screen on a
+  // smaller device (verifying that is phone-only, same as every other layout in this app).
+  body: { flex: 1 },
+  bodyContent: { justifyContent: 'center', flexGrow: 1, gap: spacing.sm },
   intro: { marginBottom: spacing.lg },
   steps: { gap: spacing.md },
   step: { borderRadius: radius.lg, gap: spacing.xs },
