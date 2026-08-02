@@ -201,7 +201,11 @@ watch the converge/burst/reveal sequence land.
 > grow-or-spawn rule, so a fish at 110/120 earning 25 XP lands on 120 and the other 15 starts a
 > new Fry. Implemented in `reward.ts` (`distributeXp`) and verified below.
 
-## M4 — Accountability + streaks  [~] built and unit-tested, awaiting the on-device demo
+## M4 — Accountability + streaks  [~] complete and unit-tested, awaiting the on-device demo
+
+**The logic is done.** The one open question this milestone carried (backgrounding for the whole
+session escaping the penalty) has been resolved by your decision and implemented — see the resolved
+note at the end of this section. What is left is phone-only: the two gates below, nothing else.
 
 - [x] `AppState` listener with a grace period before penalizing — never penalize on `inactive`
       (Control Center, notification shade, phone call), only sustained `background`.
@@ -212,7 +216,11 @@ watch the converge/burst/reveal sequence land.
       trusted to fire while backgrounded — and refuses to overwrite an already-open excursion, so
       a `background → inactive → background` blip mid-excursion still measures from the real
       start. `resolveForeground` computes the decision from `now - backgroundedAt` against
-      `ACCOUNTABILITY.backgroundGraceMs` (8s, inclusive: exactly 8s is forgiven, 8s+1ms is not)
+      `ACCOUNTABILITY.backgroundGraceMs` (8s, inclusive: exactly 8s is forgiven, 8s+1ms is not).
+      The excursion length is checked **first**, before any wall-clock reconcile, so a session
+      whose `endsAt` also passed while away is still abandoned rather than completed — see the
+      resolved open question below. `tick` is suppressed entirely while an excursion is open, so
+      `resolveForeground` is the *only* path that can resolve a backgrounded session
 - [x] Penalty forfeits in-progress growth and marks the fish `sick` (desaturated, recovers on next
       completed session) — **never deletes a fish**. `applyPenalty` (`src/features/pet/penalty.ts`)
       is pure and reuses the reward rule's target selection, so the fish that gets sick is exactly
@@ -236,14 +244,19 @@ watch the converge/burst/reveal sequence land.
 
 Verified on 2026-08-02 by an independent review pass, machine-checkable parts only:
 
-- `npm test` → **184 tests, 14 suites, all passing** (135 at M3; 178 after the M4 build commit,
-  plus 6 added by this review pass)
+- `npm test` → **189 tests, 14 suites, all passing** (135 at M3; 178 after the M4 build commit,
+  plus 6 from the first review pass, 1 from the penalty-priority fix and 4 from its review)
   - `streak.test.ts` (14) — the date math, including the DST cases described below
   - `penalty.test.ts` (5) — target selection matches the reward rule, no-op on an empty or
     fully-capped collection, idempotent when the target is already sick, never mutates its input
   - `useTimerStore.test.ts` — `noteBackgrounded`/`resolveForeground`: idle and paused are not
     tracked, a break is not tracked, an already-open excursion is not overwritten, both sides of
-    the grace boundary *and* the boundary itself, no double-penalty on repeated foreground events
+    the grace boundary *and* the boundary itself, no double-penalty on repeated foreground events,
+    a full-duration background still abandons, and `tick` is suppressed mid-excursion but not
+    during a break
+  - `FocusScreen.test.tsx` — the same rules through the real screen and real `AppState` events,
+    including an interval tick delivered *before* the foreground event (still abandons) and a
+    within-grace excursion spanning `endsAt` (still completes)
   - `reward.test.ts` — overflow carries rather than evaporating, spills into a second under-cap
     fish before spawning, chains across capped fish, cures every fish the chain grows, and
     conserves XP exactly over a 60-fish chain without unbounded recursion
@@ -277,12 +290,62 @@ The remaining gate needs your phone: start a focus session, background the app f
 seconds, come back and watch a fish go grey and flinch — then complete a session and watch it
 recover, and complete sessions on consecutive days to see the streak line climb.
 
-> **Open question carried into M5 — backgrounding for the *whole* session is not penalized, and
-> is still fully rewarded.** `resolveForeground` folds the wall clock in before deciding, so a
-> session whose `endsAt` passed while the app was away completes normally. That deliberately
-> preserves M1's "lock your phone, the notification fires" flow, but it means the accountability
-> hook only bites the user who comes back *early* — walking away for the full 25 minutes is the
-> optimal strategy. See CLAUDE.md; this needs your call, not a code fix.
+> ~~**Open question carried into M5 — backgrounding for the *whole* session is not penalized, and
+> is still fully rewarded.**~~ **Resolved after the M4 review** — you chose (b): sustained
+> backgrounding past the grace period **always** penalizes, and "the timer would also have
+> finished while I was away" is not an escape hatch. `resolveForeground` now checks the excursion
+> length *before* folding the wall clock in, so a 25-minute session backgrounded for 25 minutes
+> abandons and sickens a fish instead of paying out in full. Within the grace period nothing
+> changed: a brief excursion that happens to span `endsAt` still completes normally, so the M1
+> "glance at your lock screen" affordance survives — it is now measured in seconds rather than
+> being open-ended. The scheduled end-of-session notification still fires either way; what it no
+> longer implies is that walking away for the whole session is rewarded.
+
+**Second review pass, 2026-08-02** (`aae6029`). Re-ran everything independently: 189 tests / 14
+suites green, `tsc --noEmit` clean, `expo-doctor` 18/18, `expo export --platform ios` succeeds at
+4.7 MB. The new check order is correct — traced against the code, not the report — and the
+boundary is unchanged and consistent (`elapsed > grace` penalizes, so exactly 8s is still forgiven,
+matching the convention pinned at the first review pass).
+
+One real bug found and fixed: **the check order alone did not actually close the hole, because
+`resolveForeground` was not the only path to `completed`.** `useTimer`'s interval independently
+calls `tick()` once the wall clock passes `endsAt`, and iOS can deliver an overdue timer callback
+*before* the `AppState` `'active'` listener on resume. The session was then already `completed`
+when `resolveForeground` ran, failing its `status === 'running'` check — so a full-session
+background escaped the penalty again, via a race this time instead of via the check order, and
+whether the user was penalized depended on JS timer delivery order. `tick` is now a no-op while
+`backgroundedAt` is set, making `resolveForeground` the exclusive resolver of a backgrounded
+session — which is also what M1 always assumed (a backgrounded session is reconciled on return,
+not by an interval the OS has suspended). **Rule this proves: changing the priority of a decision
+is only sound once you have found every writer that can pre-empt it.**
+
+### Known and accepted limitations at the close of M4
+
+Deliberate, decided, and *not* bugs to be silently fixed later — revisit each on its own merits:
+
+- **A manual "Give up" is still exempt from the penalty.** Reviewed and left as-is: the spec's
+  stated trigger is sustained backgrounding, and give-up already forfeits the reward. It does mean
+  the honest user who taps Give up is treated better than one who just backgrounds. Related:
+  a manual give-up does not increment `stats.abandonedSessions` either, so that counter
+  under-reports by its own name. Both are part of the same question; change them together or not
+  at all.
+- **A user whose fish are all capped cannot be penalized.** `applyPenalty` reuses the reward
+  rule's "first fish with room" selection, so when every fish is waiting on a merge there is no
+  target and leaving early is free. Symmetric with the reward side (that user earns nothing from a
+  completed session either), but a real late-game gap. Fixing it means sickening a capped fish
+  anyway, or the most recently grown one.
+- **Force-quitting while backgrounded escapes the penalty entirely.** `useTimerStore` is transient
+  by design (M1), so `backgroundedAt` and the in-flight session die with the process; relaunching
+  finds an idle timer and nothing to penalize. Same root cause as "a completed session is lost if
+  force-quit", and the same fix — persisting the in-flight session — which is an M5 item, not an
+  M4 one. M4 only raises the stakes, by making it a way to dodge a consequence rather than only a
+  way to lose a reward.
+- **A background excursion that starts within seconds of `endsAt` is penalized in full.** Falls
+  straight out of your decision rather than being an oversight: the rule measures the excursion,
+  not its overlap with the session, so backgrounding at 24:57 of a 25:00 session and returning an
+  hour later abandons it. Deterministic (that is what the `tick` guard buys), and arguably right
+  under "leaving the app is what's punished" — but if it ever feels too harsh, the one-line change
+  is to clamp the excursion to `min(now, endsAt) - backgroundedAt`.
 
 ## M5 — Stats, settings, polish
 

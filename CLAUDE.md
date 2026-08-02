@@ -1,6 +1,6 @@
 # Project Context
 
-## Status: M4 (accountability + streaks) built — M5 is next
+## Status: M4 (accountability + streaks) complete pending the phone gates — M5 is next
 
 The Expo app exists on `main`, builds, has a working Pomodoro timer, and completed focus sessions
 hatch/grow procedurally drawn Skia fish that swim in the Aquarium tab. As of M3 the full core loop
@@ -8,7 +8,10 @@ is closed: sessions grow fish, capped fish accumulate, and three same-stage fish
 merged into one of the next stage with a converge/burst/reveal sequence. M4 adds the retention
 half: leaving a running focus session backgrounded past a grace period auto-abandons it and marks
 a fish sick, a completed session cures it, and consecutive-day streaks are tracked and shown on
-the Focus screen. `docs/PLAN.md` is the milestone sequence; M5 (stats, settings, polish) is next.
+the Focus screen. **M4's logic is now considered done** — its one open product question (whether
+backgrounding for the entire session should escape the penalty) was decided and implemented, see
+below — and only the on-device gates remain. `docs/PLAN.md` is the milestone sequence; M5 (stats,
+settings, polish) is next.
 
 ### Current repo state (2026-08-02)
 
@@ -90,8 +93,22 @@ the Focus screen. `docs/PLAN.md` is the milestone sequence; M5 (stats, settings,
     overwrite an already-open one, so an `inactive` blip *inside* an excursion
     (`background → inactive → background`) still measures from the real start rather than
     restarting the grace clock. Both directions are tested.
-  - `resolveForeground` **folds the wall clock in first**. A session whose `endsAt` passed while
-    away is a normal completion, not a penalty — see the open issue about this below.
+  - **`resolveForeground` checks the excursion length *first*, before any wall-clock reconcile
+    (the user's call, decided after the M4 review — do not revert without asking).** Past the
+    grace period the session is always abandoned and `lastPenaltyToken` bumped, *regardless* of
+    whether `endsAt` also passed while away: a 25-minute session backgrounded for 25 minutes is a
+    penalty, not a payout. Only *within* the grace period does it fold the clock in, which is what
+    still lets a brief lock-screen glance spanning `endsAt` complete normally.
+  - **`tick` is a no-op while `backgroundedAt` is set, and that is load-bearing** — without it the
+    priority above is decided by a race, not by the code. `useTimer`'s interval is a second,
+    independent path to `completed` (`if (current >= endsAt) tick(current)`), and iOS can deliver
+    an overdue timer callback *before* the `AppState` `'active'` listener on resume; the session
+    would already be `completed` when `resolveForeground` ran, failing its `status === 'running'`
+    check, and the excursion would escape. The guard makes `resolveForeground` the exclusive
+    resolver of a backgrounded session — which is what M1 always assumed anyway. It lives in the
+    `tick` *action*, not in `dispatch`, because `resolveForeground`'s own within-grace TICK is
+    dispatched after it clears `backgroundedAt` and must still complete the session. **Never add
+    another caller that can complete a session while an excursion is open.**
   - Backgrounding during a **break** is exempt via a real `timer.mode !== 'focus'` check in
     `noteBackgrounded`, and the manual **"Give up"** button is exempt too. `useLeaveEarlyPenalty`
     keys off `lastPenaltyToken` (a counter bumped only by the auto-abandon path) rather than

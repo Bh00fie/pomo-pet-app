@@ -6,7 +6,7 @@ the hit — that accountability loop (in the spirit of apps like Forest) is the 
 
 ## Status
 
-🏗 **M4 built — the loop is closed *and* it has consequences.** Start/pause/resume/reset run off
+🏗 **M4 complete — the loop is closed *and* it has consequences.** Start/pause/resume/reset run off
 an absolute-timestamp state machine (`endsAt`, never a decrementing counter), with customizable
 work/break lengths and a local notification scheduled for the end of the session. Finishing a
 focus session grows a fish, drawn procedurally in Skia — body, tail and fins are parametric paths,
@@ -14,16 +14,17 @@ so the three growth stages are parameter sets rather than separate assets — an
 animates off a single shared frame clock. Once every fish is capped the next session hatches a new
 one, and XP past a stage cap spills into the next fish instead of evaporating; tap three of the
 same stage and merge them into one of the next stage, with a converge → burst → spring-reveal
-sequence. Leave a focus session backgrounded past an 8-second grace period and it is abandoned and
-a fish goes grey, desaturated and sluggish, until a completed session nurses it back. Consecutive
-days with a completed session build a streak, shown on the Focus screen. See
-[`docs/PLAN.md`](docs/PLAN.md) for the milestone sequence and what's actually verified.
+sequence. Leave a focus session backgrounded past an 8-second grace period — for the whole session
+or just past the grace period, it makes no difference now — and it is abandoned and a fish goes
+grey, desaturated and sluggish, until a completed session nurses it back. Consecutive days with a
+completed session build a streak, shown on the Focus screen. See [`docs/PLAN.md`](docs/PLAN.md)
+for the milestone sequence and what's actually verified.
 
 Open items all need a real iPhone: the M0 gate (the project opens in App Store Expo Go), the M1
 gate (the end-of-session notification genuinely fires), the M2 gate (the tank looks right and
 stays smooth with several fish), the M3 gate (the merge sequence reads as satisfying) and the M4
 gate (a sick fish reads as unwell, and real iOS `AppState` behaves as modelled). Everything
-machine-checkable — 184 unit tests, type-check, `expo-doctor`, iOS bundle export — passes.
+machine-checkable — 189 unit tests, type-check, `expo-doctor`, iOS bundle export — passes.
 
 ## Running it
 
