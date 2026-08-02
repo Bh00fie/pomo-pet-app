@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring } from 'react-native-reanimated';
 
-import { ParticleBurst, springs, useReduceMotion } from '@/anim';
+import { durations, ParticleBurst, springs, useReduceMotion } from '@/anim';
 import { SHOP } from '@/config';
 import { getSpecies, SPECIES_ORDER, STARTER_SPECIES_ID, type SpeciesId } from '@/features/pet';
 import { useAppStore } from '@/store';
@@ -22,9 +22,14 @@ interface Celebration {
 
 type RowLayout = { x: number; y: number; width: number; height: number };
 
-function priceLabel(speciesId: SpeciesId): string {
+/** `SHOP.speciesPriceUsd` is typed `Record<string, number>`, so an id with no entry type-checks
+ *  as a `number` and would blow up on `.toFixed` at runtime — crashing the whole Shop screen, not
+ *  just the row. Unreachable today (the starter is the only unpriced species and it is always
+ *  owned, so no price is ever rendered for it), but a species added to `SPECIES_ORDER` without a
+ *  price should degrade to an un-buyable row, never a white screen. */
+function priceLabel(speciesId: SpeciesId): string | null {
   const usd = SHOP.speciesPriceUsd[speciesId];
-  return `$${usd.toFixed(2)}`;
+  return typeof usd === 'number' ? `$${usd.toFixed(2)}` : null;
 }
 
 function purchaseErrorMessage(error: string | undefined): string {
@@ -62,6 +67,16 @@ export function ShopScreen() {
   // Reduce Motion rather than played in a scaled-down form.
   const reduced = useReduceMotion() !== 1;
 
+  // Tear the burst overlay down once it has finished playing. Without this, one purchase leaves a
+  // full-bleed Skia `Canvas` mounted over the list for the rest of the screen's life — invisible
+  // and `pointerEvents="none"`, so harmless to interaction, but a live canvas nonetheless. Keyed
+  // on `trigger` so a second purchase restarts the timer rather than inheriting the first one's.
+  useEffect(() => {
+    if (!celebration) return;
+    const timeout = setTimeout(() => setCelebration(null), durations.scene);
+    return () => clearTimeout(timeout);
+  }, [celebration]);
+
   const rowLayoutsRef = useRef<Partial<Record<SpeciesId, RowLayout>>>({});
   const handleRowLayout = useCallback((speciesId: SpeciesId, event: LayoutChangeEvent) => {
     const { x, y, width, height } = event.nativeEvent.layout;
@@ -72,27 +87,43 @@ export function ShopScreen() {
     async (speciesId: SpeciesId) => {
       setPurchaseStates((prev) => ({ ...prev, [speciesId]: { status: 'pending' } }));
 
-      const result = await mockEntitlementProvider.purchaseSpecies(speciesId);
+      try {
+        const result = await mockEntitlementProvider.purchaseSpecies(speciesId);
 
-      if (result.ok) {
-        // The provider only ever reports what happened — applying a successful purchase to
-        // `entitlements` is this call site's job, exactly as it will be again for the real
-        // provider at M6b (see `MockEntitlementProvider`'s doc comment).
-        unlockSpecies(speciesId);
-        setPurchaseStates((prev) => ({ ...prev, [speciesId]: { status: 'idle' } }));
+        if (result.ok) {
+          // The provider only ever reports what happened — applying a successful purchase to
+          // `entitlements` is this call site's job, exactly as it will be again for the real
+          // provider at M6b (see `MockEntitlementProvider`'s doc comment). Deliberately the first
+          // statement after a successful result and *not* guarded by an is-mounted check: a store
+          // write must survive this screen unmounting mid-await (a tab switch during the ~1s
+          // round trip), or a purchase the provider considers made would leave no trace locally.
+          // The `setState` calls below are the ones that no-op after unmount, which is harmless.
+          unlockSpecies(speciesId);
+          setPurchaseStates((prev) => ({ ...prev, [speciesId]: { status: 'idle' } }));
 
-        if (!reduced) {
-          const layout = rowLayoutsRef.current[speciesId];
-          setCelebration({
-            x: (layout?.x ?? 0) + (layout?.width ?? 0) / 2,
-            y: (layout?.y ?? 0) + (layout?.height ?? 0) / 2,
-            trigger: Date.now(),
-          });
+          if (!reduced) {
+            const layout = rowLayoutsRef.current[speciesId];
+            setCelebration({
+              x: (layout?.x ?? 0) + (layout?.width ?? 0) / 2,
+              y: (layout?.y ?? 0) + (layout?.height ?? 0) / 2,
+              trigger: Date.now(),
+            });
+          }
+        } else {
+          setPurchaseStates((prev) => ({
+            ...prev,
+            [speciesId]: { status: 'error', message: purchaseErrorMessage(result.error) },
+          }));
         }
-      } else {
+      } catch {
+        // `EntitlementProvider.purchaseSpecies` is documented to resolve rather than reject, and
+        // the mock honours that — but a *rejection* is the one outcome that would otherwise leave
+        // this row stuck on "Buying…" with its button disabled and no way back short of killing
+        // the app. That is not hypothetical for M6b: RevenueCat's `purchasePackage` throws on a
+        // user cancellation. Never leave the UI without a terminal state.
         setPurchaseStates((prev) => ({
           ...prev,
-          [speciesId]: { status: 'error', message: purchaseErrorMessage(result.error) },
+          [speciesId]: { status: 'error', message: purchaseErrorMessage(undefined) },
         }));
       }
     },
@@ -101,10 +132,17 @@ export function ShopScreen() {
 
   const handleRestore = useCallback(async () => {
     setRestoring(true);
-    const owned = await mockEntitlementProvider.restorePurchases();
-    syncUnlockedSpeciesIds(owned);
-    setRestoring(false);
-    Alert.alert('Restore purchases', 'Your unlocked species are up to date.');
+    try {
+      const owned = await mockEntitlementProvider.restorePurchases();
+      syncUnlockedSpeciesIds(owned);
+      Alert.alert('Restore purchases', 'Your unlocked species are up to date.');
+    } catch {
+      Alert.alert('Restore purchases', "Couldn't reach the store. Try again in a moment.");
+    } finally {
+      // In a `finally` so a rejection can never strand the button disabled and reading
+      // "Restoring…" forever — same reasoning as the purchase path above.
+      setRestoring(false);
+    }
   }, [syncUnlockedSpeciesIds]);
 
   return (
@@ -178,6 +216,7 @@ function ShopRow({
   const species = getSpecies(speciesId);
   const isStarter = speciesId === STARTER_SPECIES_ID;
   const pending = purchaseState.status === 'pending';
+  const price = priceLabel(speciesId);
 
   // The unlock "pop" (docs/PLAN.md M6a) — reuses `springs.celebrate`, the same spring the M3
   // merge reveal pops the new fish in with, rather than inventing a second celebratory feel.
@@ -200,7 +239,11 @@ function ShopRow({
           <View style={styles.rowInfo}>
             <Text variant="label">{species.name}</Text>
             <Text variant="caption" color="textMuted">
-              {isStarter ? 'Starter species · always owned' : owned ? 'Unlocked' : priceLabel(speciesId)}
+              {isStarter
+                ? 'Starter species · always owned'
+                : owned
+                  ? 'Unlocked'
+                  : (price ?? 'Not available yet')}
             </Text>
             {purchaseState.status === 'error' && (
               <Text variant="caption" color="danger">
@@ -221,7 +264,11 @@ function ShopRow({
               </Text>
             </Pressable>
           ) : (
-            <Button label={pending ? 'Buying…' : `Buy ${priceLabel(speciesId)}`} disabled={pending} onPress={onBuy} />
+            <Button
+              label={pending ? 'Buying…' : price ? `Buy ${price}` : 'Unavailable'}
+              disabled={pending || price === null}
+              onPress={onBuy}
+            />
           )}
         </Card>
       </Animated.View>

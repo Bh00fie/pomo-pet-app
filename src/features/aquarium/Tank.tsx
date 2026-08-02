@@ -212,9 +212,9 @@ export const Tank = forwardRef<TankHandle, TankProps>(function Tank({ fish, onSe
         if (prev.includes(target.id)) return prev.filter((id) => id !== target.id);
 
         // Species is checked alongside stage so the selection the UI lets you build is always one
-        // `evaluateMerge` will accept. Moot today (one species), but once the shop ships more
-        // (M6a) a mixed-species tap would otherwise enable the Merge button and then fail with an
-        // alert — the UI rule and the domain rule have to agree, not just overlap.
+        // `evaluateMerge` will accept. Live as of the M6a shop (three species now ship): without
+        // this, a mixed-species tap would enable the Merge button and then fail with an alert —
+        // the UI rule and the domain rule have to agree, not just overlap.
         const anchor = prev.length > 0 ? fish.find((f) => f.id === prev[0]) : undefined;
         if (anchor && (anchor.stage !== target.stage || anchor.speciesId !== target.speciesId)) {
           return [target.id]; // switching stage or species replaces the selection

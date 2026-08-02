@@ -17,9 +17,11 @@ export interface ParticleBurstProps {
 
 /**
  * A burst of small particles flying outward from a point and fading — a reusable primitive for
- * celebration moments (merge reveal, XP gain). Not wired into any screen yet (M3/M4); this just
- * needs to exist and work. All particles are drawn as one `Path` (circles unioned via
- * `addCircle`) so a burst costs one draw call regardless of `count`.
+ * celebration moments. Wired into the M3 merge reveal (`MergeSequence`) and the M6a shop unlock
+ * (`ShopScreen`). All particles are drawn as one `Path` (circles unioned via `addCircle`) so a
+ * burst costs one draw call regardless of `count`.
+ *
+ * Renders Skia nodes only — it must be mounted inside a `Canvas`, never on its own.
  */
 export function ParticleBurst({ cx, cy, color = '#FFD166', trigger, count = 10, radius = 46 }: ParticleBurstProps) {
   const progress = useSharedValue(0);

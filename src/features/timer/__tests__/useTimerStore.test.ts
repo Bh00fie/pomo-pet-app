@@ -159,6 +159,50 @@ describe('reset / abandon / tick', () => {
     expect(useAppStore.getState().fish.find((f) => f.id === fishId)?.health).toBe('healthy');
   });
 
+  it('a same-tick double tap on Give up counts exactly once (M6a review)', async () => {
+    // `set` is synchronous, so the second call's own `isActive` read already sees `abandoned` —
+    // this pins that, rather than trusting that a user cannot physically tap twice in one tick.
+    useAppStore.getState().resetAll();
+    useTimerStore.getState().start();
+    await flush();
+
+    useTimerStore.getState().abandon();
+    useTimerStore.getState().abandon();
+    await flush();
+
+    expect(useAppStore.getState().stats.abandonedSessions).toBe(1);
+  });
+
+  it('giving up on a break is not an abandoned session (M6a review — matches the M4 break exemption)', async () => {
+    // Every other side of the accountability loop exempts breaks: `noteBackgrounded` refuses to
+    // open an excursion outside focus, and `useSessionReward` awards nothing for one. Skipping a
+    // break must not land on the Stats screen's focus-only "LEFT EARLY" tile.
+    useAppStore.getState().resetAll();
+    useTimerStore.getState().start({ mode: 'break' });
+    await flush();
+
+    useTimerStore.getState().abandon();
+    await flush();
+
+    expect(useTimerStore.getState().timer.status).toBe('abandoned');
+    expect(useAppStore.getState().stats.abandonedSessions).toBe(0);
+  });
+
+  it('still counts a manual give-up from a paused focus session, not only a running one', async () => {
+    // `machine.ts`'s ABANDON guard accepts `paused` as well as `running`; the store's own check
+    // has to agree in that direction too, or a real abandon goes uncounted.
+    useAppStore.getState().resetAll();
+    useTimerStore.getState().start();
+    await flush();
+    useTimerStore.getState().pause();
+    await flush();
+
+    useTimerStore.getState().abandon();
+    await flush();
+
+    expect(useAppStore.getState().stats.abandonedSessions).toBe(1);
+  });
+
   it('does not count an abandon call when there was no active session to abandon', () => {
     // `machine.ts`'s ABANDON transition is already a no-op outside running/paused; the store's
     // `wasActive` check must agree, so a stray call can never double-count.

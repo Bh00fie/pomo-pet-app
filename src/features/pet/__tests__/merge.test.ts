@@ -1,5 +1,5 @@
 import { GROWTH } from '@/config';
-import { createFish, GOLDEN_KOI_SPECIES_ID, STARTER_SPECIES_ID, type Fish } from '../model';
+import { createFish, SPECIES_ORDER, GOLDEN_KOI_SPECIES_ID, STARTER_SPECIES_ID, type Fish } from '../model';
 import { evaluateMerge, isMergeEligibleStage } from '../merge';
 
 function fry(id: string, speciesId: string = STARTER_SPECIES_ID): Fish {
@@ -59,6 +59,33 @@ describe('evaluateMerge', () => {
     const result = evaluateMerge({ fish, selectedIds: ['a', 'b', 'c'], now: 0, idFactory });
     expect(result).toEqual({ ok: false, reason: 'mixed-species' });
   });
+
+  it.each(
+    SPECIES_ORDER.flatMap((a) =>
+      SPECIES_ORDER.filter((b) => b !== a).map((b) => [a, b] as const),
+    ),
+  )(
+    'rejects mixing %s with %s — every ordered species pair in the catalog, not just one',
+    (majority, odd) => {
+      // Driven off `SPECIES_ORDER` rather than a hand-written pair list, so a species added at
+      // M6b/v2 is covered the day it ships instead of quietly widening this gap.
+      const fish = [fry('a', majority), fry('b', majority), fry('c', odd)];
+      const result = evaluateMerge({ fish, selectedIds: ['a', 'b', 'c'], now: 0, idFactory });
+      expect(result).toEqual({ ok: false, reason: 'mixed-species' });
+    },
+  );
+
+  it.each(SPECIES_ORDER.map((id) => [id] as const))(
+    'merges three same-species %s fish, and the result keeps that species',
+    (speciesId) => {
+      const fish = [fry('a', speciesId), fry('b', speciesId), fry('c', speciesId)];
+      const result = evaluateMerge({ fish, selectedIds: ['a', 'b', 'c'], now: 0, idFactory });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.newFish.speciesId).toBe(speciesId);
+      expect(result.newFish.stage).toBe('juvenile');
+    },
+  );
 
   it('still merges three same-species Golden Koi normally — the restriction is per-species, not starter-only', () => {
     const fish = [

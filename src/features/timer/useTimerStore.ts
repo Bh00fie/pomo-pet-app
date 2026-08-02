@@ -14,6 +14,7 @@ import { useAppStore } from '@/store';
 import { minutesToMs } from './durations';
 import {
   createTimerState,
+  isActive,
   transition,
   type TimerEvent,
   type TimerMode,
@@ -132,15 +133,23 @@ export const useTimerStore = create<TimerStore>()((set, get) => {
     pause: () => get().dispatch({ type: 'PAUSE', now: Date.now() }),
     resume: () => get().dispatch({ type: 'RESUME', now: Date.now() }),
     abandon: () => {
-      // Only a running or paused session can actually be abandoned (see `machine.ts`'s ABANDON
-      // guard) — check before dispatching so a stray call from an already-idle/terminal state
-      // (the UI never offers "Give up" then) can't double-count. This is the manual-only path:
-      // the auto-abandon path (`resolveForeground`) dispatches ABANDON directly, not through
-      // here, and counts itself via `penalizeAbandonedSession` instead — so the two can never
-      // double-increment the same abandonment.
-      const wasActive = get().timer.status === 'running' || get().timer.status === 'paused';
+      // Only a running or paused session can actually be abandoned — `isActive` is the machine's
+      // *own* predicate for exactly the states its ABANDON guard accepts, reused here rather than
+      // re-spelled, so the two can never drift apart. Checked before dispatching so a stray call
+      // from an already-idle/terminal state (the UI never offers "Give up" then), or a same-tick
+      // double tap (zustand's `set` is synchronous, so the second read already sees `abandoned`),
+      // can't double-count. This is the manual-only path: the auto-abandon path
+      // (`resolveForeground`) dispatches ABANDON directly, not through here, and counts itself
+      // via `penalizeAbandonedSession` — so the two can never double-increment one abandonment.
+      //
+      // Focus only, matching every other side of the break exemption (M4): `noteBackgrounded`
+      // refuses to open an excursion during a break, and `useSessionReward` awards nothing for
+      // one. Giving up on a *break* is not an abandoned focus session and must not land on the
+      // Stats screen's "LEFT EARLY" tile, which sits alongside focus-only counters.
+      const before = get().timer;
+      const countable = isActive(before) && before.mode === 'focus';
       get().dispatch({ type: 'ABANDON', now: Date.now() });
-      if (wasActive) useAppStore.getState().recordManualAbandon();
+      if (countable) useAppStore.getState().recordManualAbandon();
     },
 
     tick: (now) => {
