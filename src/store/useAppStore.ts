@@ -5,6 +5,7 @@ import { APP, TIMER } from '@/config';
 // Submodule imports (not the `@/features/pet` barrel) — the barrel re-exports `useSessionReward`,
 // which imports this store, and going through it here would create a module-load cycle.
 import { generateFishId } from '@/features/pet/id';
+import { evaluateMerge, type MergeResult } from '@/features/pet/merge';
 import { STARTER_SPECIES_ID } from '@/features/pet/model';
 import { applySessionReward } from '@/features/pet/reward';
 import { SCHEMA_VERSION, migrate } from './migrations';
@@ -18,6 +19,15 @@ interface AppActions {
    *  spawns a starter Fry if the user has none yet. Called by `useSessionReward` on the timer
    *  engine's `completed` transition. */
   awardSessionCompletion: (focusMs: number, now: number) => void;
+  /**
+   * Evaluates and, if legal, atomically applies a merge (docs/PLAN.md M3): combining
+   * `GROWTH.fishPerMerge` same-stage, same-species fish into one fish of the next stage. Always
+   * returns the full result — including a rejection reason on failure — so the caller (the
+   * Aquarium screen) can react, e.g. only playing the merge animation when `ok` is true and
+   * showing feedback otherwise. State only ever changes when the merge is legal; a rejected
+   * merge leaves the fish collection completely untouched, never partially edited.
+   */
+  mergeFish: (selectedIds: string[], now: number) => MergeResult;
   /** Test/dev affordance — wipes persisted state back to defaults. */
   resetAll: () => void;
 }
@@ -55,7 +65,7 @@ const initialPersisted: PersistedState = {
 
 export const useAppStore = create<AppStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...initialPersisted,
       hydrated: false,
 
@@ -72,6 +82,20 @@ export const useAppStore = create<AppStore>()(
           });
           return { fish: result.fish };
         }),
+
+      mergeFish: (selectedIds, now) => {
+        // Evaluated against a single read of current state, then applied in one `set` — the
+        // merge either lands as a whole (removed fish gone, new fish present) or `set` is never
+        // called at all, so a rejected merge can never leave the collection half-edited.
+        const result = evaluateMerge({
+          fish: get().fish,
+          selectedIds,
+          now,
+          idFactory: () => generateFishId(now),
+        });
+        if (result.ok) set({ fish: result.fish });
+        return result;
+      },
 
       resetAll: () => set({ ...initialPersisted }),
     }),
