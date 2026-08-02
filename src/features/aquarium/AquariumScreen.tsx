@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
   countPill: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
-    borderRadius: 999,
+    borderRadius: radius.pill,
     backgroundColor: 'rgba(234,244,255,0.08)',
   },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },

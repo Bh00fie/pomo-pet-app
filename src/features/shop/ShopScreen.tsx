@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store';
+import { spacing } from '@/theme';
 import { Card, Screen, Text } from '@/ui';
 
 /**
@@ -11,7 +12,7 @@ export function ShopScreen() {
   return (
     <Screen>
       <Text variant="title">Shop</Text>
-      <Card style={{ marginTop: 16 }}>
+      <Card style={{ marginTop: spacing.lg }}>
         <Text variant="label" color="textMuted">
           M6a — mock entitlements
         </Text>

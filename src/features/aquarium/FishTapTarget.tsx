@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 
-import { colors } from '@/theme';
+import { colors, radius } from '@/theme';
 import type { FishKinematics } from './steering';
 
 export interface FishTapTargetProps {
@@ -44,7 +44,7 @@ export function FishTapTarget({ kinematics, size, selected, onPress }: FishTapTa
 
 const styles = StyleSheet.create({
   wrap: { position: 'absolute' },
-  hit: { flex: 1, borderRadius: 999 },
+  hit: { flex: 1, borderRadius: radius.pill },
   selected: {
     borderWidth: 2,
     borderColor: colors.sun,
