@@ -9,10 +9,29 @@ import { AppState } from 'react-native';
 
 import { ACCOUNTABILITY } from '@/config';
 import { useLeaveEarlyPenalty } from '@/features/pet';
+import { GOLDEN_KOI_SPECIES_ID, STARTER_SPECIES_ID } from '@/features/pet/model';
 import { useAppStore } from '@/store';
 import { FocusScreen } from '../FocusScreen';
 import { createTimerState } from '../machine';
 import { useTimerStore } from '../useTimerStore';
+
+/**
+ * Same local Skia stub as `ShopScreen.test.tsx`, and for the same reason: Skia ships ESM that
+ * `jest-expo` does not transform and its own setup wants a CanvasKit wasm build. The only Skia on
+ * this screen is `TimerRing`'s progress arc, which is decoration over the timing logic under test —
+ * nothing below reads a pixel. The clock text lives in a plain RN `Text` overlay, not inside the
+ * Canvas, so every assertion about the countdown still exercises the real thing.
+ */
+jest.mock('@shopify/react-native-skia', () => {
+  const inert = () => null;
+  return {
+    __esModule: true,
+    Canvas: ({ children }: { children?: React.ReactNode }) => children ?? null,
+    Group: ({ children }: { children?: React.ReactNode }) => children ?? null,
+    Path: inert,
+    Skia: { Path: { Make: () => ({ addCircle: inert }) } },
+  };
+});
 
 jest.mock('../notifications', () => ({
   __esModule: true,
@@ -320,6 +339,56 @@ describe('FocusScreen', () => {
 
       expect(useTimerStore.getState().timer.status).toBe('abandoned');
       expect(screen.getByText('SESSION ABANDONED')).toBeTruthy();
+    });
+
+    it('names the fish a completed focus session hatched, not just "a new fish"', async () => {
+      // Matches the concept gallery's "+1 Fry earned" card: the reward is a specific animal, so
+      // the screen says which. Reads it off the fish, not off the active-species setting — a long
+      // session draws its species at random and the two genuinely disagree.
+      useAppStore.setState({
+        fish: [
+          { id: 'old', speciesId: STARTER_SPECIES_ID, stage: 'fry', bornAt: 1, health: 'healthy' },
+          { id: 'new', speciesId: GOLDEN_KOI_SPECIES_ID, stage: 'juvenile', bornAt: 2, health: 'healthy' },
+        ],
+      });
+      useTimerStore.setState({
+        timer: { status: 'completed', mode: 'focus', endsAt: NOW, durationMs: 25 * MINUTE, pausedRemainingMs: 0 },
+      });
+
+      await render(<FocusScreen />);
+
+      expect(screen.getByText('SESSION COMPLETE')).toBeTruthy();
+      expect(screen.getByText('A Golden Koi Juvenile hatched.')).toBeTruthy();
+    });
+
+    it('does not claim a fish when it was a *break* that completed', async () => {
+      // Breaks hatch nothing. The newest fish is still sitting in the store, so an unguarded
+      // version of the line above would happily credit it to the break.
+      useAppStore.setState({
+        fish: [{ id: 'new', speciesId: GOLDEN_KOI_SPECIES_ID, stage: 'juvenile', bornAt: 2, health: 'healthy' }],
+      });
+      useTimerStore.setState({
+        timer: { status: 'completed', mode: 'break', endsAt: NOW, durationMs: 5 * MINUTE, pausedRemainingMs: 0 },
+      });
+
+      await render(<FocusScreen />);
+
+      expect(screen.queryByText('A Golden Koi Juvenile hatched.')).toBeNull();
+      expect(screen.getByText('Break over. Back to focus when you are ready.')).toBeTruthy();
+    });
+
+    it('falls back to the generic hint when a focus session completes with no fish at all', async () => {
+      useAppStore.setState({ fish: [] });
+      useTimerStore.setState({
+        timer: { status: 'completed', mode: 'focus', endsAt: NOW, durationMs: 25 * MINUTE, pausedRemainingMs: 0 },
+      });
+
+      await render(<FocusScreen />);
+
+      expect(screen.getByText('SESSION COMPLETE')).toBeTruthy();
+      expect(
+        screen.getByText('Session finished. Check the Aquarium tab — a new fish hatched.'),
+      ).toBeTruthy();
     });
 
     it('completes normally when a brief within-grace excursion happens to span `endsAt`', async () => {

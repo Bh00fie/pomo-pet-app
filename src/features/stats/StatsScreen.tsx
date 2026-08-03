@@ -46,25 +46,25 @@ export function StatsScreen() {
           <Text variant="caption" color="textMuted">
             TODAY
           </Text>
-          <Text variant="title">{formatMinutes(todayFocusMs)}</Text>
+          <Text variant="title" style={styles.tileValue}>{formatMinutes(todayFocusMs)}</Text>
         </Card>
         <Card style={styles.tile}>
           <Text variant="caption" color="textMuted">
             CURRENT STREAK
           </Text>
-          <Text variant="title">{stats.currentStreak}d</Text>
+          <Text variant="title" style={styles.tileValue}>{stats.currentStreak}d</Text>
         </Card>
         <Card style={styles.tile}>
           <Text variant="caption" color="textMuted">
             ALL-TIME FOCUS
           </Text>
-          <Text variant="title">{formatHours(stats.totalFocusMs)}</Text>
+          <Text variant="title" style={styles.tileValue}>{formatHours(stats.totalFocusMs)}</Text>
         </Card>
         <Card style={styles.tile}>
           <Text variant="caption" color="textMuted">
             SESSIONS
           </Text>
-          <Text variant="title">{stats.completedSessions}</Text>
+          <Text variant="title" style={styles.tileValue}>{stats.completedSessions}</Text>
         </Card>
       </View>
 
@@ -104,7 +104,7 @@ export function StatsScreen() {
         <Text variant="caption" color="textMuted">
           LEFT EARLY
         </Text>
-        <Text variant="heading">{stats.abandonedSessions}</Text>
+        <Text variant="heading" style={styles.tileValue}>{stats.abandonedSessions}</Text>
       </Card>
     </Screen>
   );
@@ -118,6 +118,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   tile: { flexGrow: 1, flexBasis: '45%' },
+  /** Tabular figures so the four tiles' numbers line up as a grid and none of them shifts width
+   *  as the value changes — same reason the Focus screen's clock uses them. */
+  tileValue: { fontVariant: ['tabular-nums'] },
   /**
    * `flex: 1` is what makes this screen fill the device rather than stopping two-thirds of the way
    * down. Everything here is fixed-height — four stat tiles, a chart, a counter — so on a 6.1"

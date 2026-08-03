@@ -3,6 +3,7 @@ export {
   selectSettings,
   selectStats,
   selectFish,
+  selectNewestFish,
   selectHydrated,
   selectSpawnSpeciesId,
 } from './useAppStore';

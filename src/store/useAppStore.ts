@@ -308,3 +308,18 @@ export const selectHydrated = (s: AppStore) => s.hydrated;
  * directly would: it is the one settings field that can name a species the user does not own.)
  */
 export const selectSpawnSpeciesId = (s: AppStore) => resolveSpawnSpeciesId(s);
+/**
+ * The most recently hatched fish, or `null` on an empty collection — the same "max `bornAt`, ties
+ * to the later array entry" rule `applyPenalty` and `cureOneSickFish` use, so the three cannot
+ * disagree about which fish is newest. Returns an element of `fish` rather than a derived object,
+ * so a subscriber does not re-render on every unrelated store write.
+ *
+ * Used by the Focus screen to name what the session just produced. It is derived rather than
+ * recorded because a completed session's hatch *is* the newest fish by construction — carrying a
+ * separate `lastHatchedFishId` would be a second source of truth for the same fact, and a
+ * persisted-schema change for something already knowable.
+ */
+export const selectNewestFish = (s: AppStore) =>
+  s.fish.length === 0
+    ? null
+    : s.fish.reduce((latest, f) => (f.bornAt >= latest.bornAt ? f : latest));

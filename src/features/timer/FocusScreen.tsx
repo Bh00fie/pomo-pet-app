@@ -1,12 +1,20 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { getSpecies } from '@/features/pet/model';
+import { getSpecies, type Fish } from '@/features/pet/model';
 import { classifySessionLength } from '@/features/pet/reward';
-import { selectHydrated, selectSettings, selectSpawnSpeciesId, selectStats, useAppStore } from '@/store';
+import {
+  selectHydrated,
+  selectNewestFish,
+  selectSettings,
+  selectSpawnSpeciesId,
+  selectStats,
+  useAppStore,
+} from '@/store';
 import { colors, radius, spacing } from '@/theme';
 import { Button, Card, Screen, Text } from '@/ui';
 import { isAtSessionBound, stepSessionMinutes } from './durations';
 import type { TimerMode } from './machine';
+import { TimerRing } from './TimerRing';
 import { useTimer } from './useTimer';
 
 /**
@@ -22,9 +30,12 @@ export function FocusScreen() {
   // debug panel: it re-validates against ownership, so the preview can never name a species the
   // active session would not actually hatch.
   const activeSpeciesName = getSpecies(useAppStore(selectSpawnSpeciesId)).name;
+  const newestFish = useAppStore(selectNewestFish);
   const timer = useTimer();
 
   const otherMode: TimerMode = timer.mode === 'focus' ? 'break' : 'focus';
+  // Only a completed *focus* session hatches anything — a finished break must not claim a fish.
+  const showHatchResult = timer.isCompleted && timer.mode === 'focus';
 
   return (
     <Screen>
@@ -34,16 +45,21 @@ export function FocusScreen() {
         </Text>
 
         {stats.currentStreak > 0 && (
-          <Text variant="caption" color="sun">
-            {stats.currentStreak}-day streak
-          </Text>
+          <View style={styles.streakChip}>
+            <Text variant="label" color="sun">
+              🔥 {stats.currentStreak}-day streak
+            </Text>
+          </View>
         )}
 
-        <Text variant="display">{timer.clock}</Text>
-
-        <View style={styles.track} accessibilityRole="progressbar">
-          <View style={[styles.fill, { width: `${Math.round(timer.progress * 100)}%` }]} />
-        </View>
+        {/* Ring, not a linear bar — see `TimerRing`. `fontVariant: tabular-nums` is load-bearing,
+            not polish: without it the proportional digits change width every second and the whole
+            centred readout jitters horizontally inside the ring. */}
+        <TimerRing progress={timer.progress} accessibilityLabel={`${timer.clock} remaining`}>
+          <Text variant="display" style={styles.clock}>
+            {timer.clock}
+          </Text>
+        </TimerRing>
 
         {timer.isIdle ? (
           <ModeSwitch mode={timer.mode} onChange={timer.setMode} />
@@ -110,7 +126,18 @@ export function FocusScreen() {
           <Text variant="label" color="textMuted">
             {timer.isCompleted ? 'SESSION COMPLETE' : 'IN SESSION'}
           </Text>
-          <Text color="textMuted">{sessionHint(timer.status, timer.mode)}</Text>
+          {/* Naming the fish is the point, and it is what the concept's "+1 Fry earned" card did:
+              the reward is a specific animal, so saying so beats "a new fish hatched". */}
+          {showHatchResult && newestFish !== null ? (
+            <>
+              <Text variant="heading" color="kelp">
+                {hatchHeadline(newestFish)}
+              </Text>
+              <Text color="textMuted">Check the Aquarium tab.</Text>
+            </>
+          ) : (
+            <Text color="textMuted">{sessionHint(timer.status, timer.mode)}</Text>
+          )}
         </Card>
       )}
     </Screen>
@@ -122,6 +149,19 @@ function statusLabel(mode: TimerMode, status: string): string {
   if (status === 'completed') return mode === 'focus' ? 'FOCUS COMPLETE' : 'BREAK OVER';
   if (status === 'abandoned') return 'SESSION ABANDONED';
   return mode === 'focus' ? 'FOCUS' : 'BREAK';
+}
+
+/** Stage names as a user reads them, rather than the lowercase `StageId` the domain stores. */
+const STAGE_LABELS: Record<Fish['stage'], string> = {
+  fry: 'Fry',
+  juvenile: 'Juvenile',
+  elder: 'Elder',
+};
+
+/** "A Golden Koi Juvenile hatched." — reads the species off the fish itself, not off the active
+ *  species setting, because a long session draws its species at random and the two disagree. */
+function hatchHeadline(fish: Fish): string {
+  return `A ${getSpecies(fish.speciesId).name} ${STAGE_LABELS[fish.stage]} hatched.`;
 }
 
 function sessionHint(status: string, mode: TimerMode): string {
@@ -256,18 +296,19 @@ function Stepper({
   );
 }
 
-const TRACK_WIDTH = 240;
-
 const styles = StyleSheet.create({
   body: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.lg },
-  track: {
-    width: TRACK_WIDTH,
-    height: 6,
+  /** Sized to sit inside the ring rather than the 64px `display` default, and pinned to
+   *  tabular figures so the digits never change width mid-countdown. */
+  clock: { fontSize: 46, fontVariant: ['tabular-nums'] },
+  streakChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceRaised,
-    overflow: 'hidden',
+    backgroundColor: colors.surface,
   },
-  fill: { height: '100%', borderRadius: radius.pill, backgroundColor: colors.coral },
   actions: { alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
   switch: {
     flexDirection: 'row',
