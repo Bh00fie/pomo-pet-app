@@ -165,7 +165,12 @@ const SHARK_SPECIES: Species = {
 const CLOWNFISH_SPECIES: Species = {
   id: CLOWNFISH_SPECIES_ID,
   name: 'Clownfish',
-  hue: 22,
+  // 350, not the original 22: at 22 this sat 10° from Coral Tetra's hue 12 on the color wheel —
+  // close enough that the two read as the same color at swatch scale, with only the stripe
+  // pattern (easy to miss at small sizes) actually telling them apart. 350 keeps the same
+  // deep-orange/red family while clearing 22° from Tetra and 50° from Golden Koi (40), instead of
+  // 10° and 18°.
+  hue: 350,
   saturation: 90,
   lightness: 58,
   stageParams: {
