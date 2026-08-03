@@ -254,3 +254,10 @@ export function nextStage(stage: StageId): StageId | null {
   const next = STAGES[stageIndex(stage) + 1];
   return next ?? null;
 }
+
+/** Newest-first, capped at `limit` — the Focus screen's mini-tank peek (concept gallery gap)
+ *  wants a handful of recent fish, not the whole collection. Always returns a fresh array, so
+ *  callers should memoize on `fish` rather than call this straight from a render. */
+export function mostRecentFish(fish: readonly Fish[], limit: number): Fish[] {
+  return [...fish].sort((a, b) => b.bornAt - a.bornAt).slice(0, limit);
+}

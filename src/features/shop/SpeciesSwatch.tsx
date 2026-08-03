@@ -1,12 +1,16 @@
 import { Canvas, Circle, Group, Oval, Path, Rect, Skia, type SkPath } from '@shopify/react-native-skia';
 import { useMemo } from 'react';
 
-import { HEALTH } from '@/config';
+import { HEALTH, type StageId } from '@/config';
 import { buildFishGeometry, getSpecies, hslToHex, type FinShape, type SpeciesId } from '@/features/pet';
 import { colors } from '@/theme';
 
 export interface SpeciesSwatchProps {
   speciesId: SpeciesId;
+  /** Which stage's geometry to draw. Defaults to `elder` — the shop's original and only use —
+   *  so the Focus screen's mini-tank peek (concept-gallery gap) can reuse this exact renderer at
+   *  a fish's *actual* stage instead of a third copy of the fish-drawing code. */
+  stage?: StageId;
   size?: number;
   /**
    * Renders desaturated and dimmed — the "enticing but not giving away the full look" treatment
@@ -29,14 +33,15 @@ function buildFinPath(shape: FinShape): SkPath {
 }
 
 /**
- * A small, static preview of a species' Elder-stage look — used by the Shop list. Deliberately
+ * A small, static preview of a species' look at a given stage (Elder by default) — used by the
+ * Shop list, and by the Focus screen's mini-tank peek at an owned fish's actual stage. Deliberately
  * not the animated `FishSprite`: nothing here swims, so it needs none of that component's
  * Reanimated kinematics or the tank's shared clock, just one Skia `Canvas` worth of static paths
  * built from the same parametric system (`buildFishGeometry`/`hslToHex`) every other fish uses.
  */
-export function SpeciesSwatch({ speciesId, size = 44, locked = false }: SpeciesSwatchProps) {
+export function SpeciesSwatch({ speciesId, stage = 'elder', size = 44, locked = false }: SpeciesSwatchProps) {
   const species = getSpecies(speciesId);
-  const stageParams = species.stageParams.elder;
+  const stageParams = species.stageParams[stage];
 
   const geometry = useMemo(() => buildFishGeometry(stageParams), [stageParams]);
   const tailPath = useMemo(() => buildFinPath(geometry.tail), [geometry]);

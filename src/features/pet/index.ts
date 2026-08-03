@@ -12,6 +12,7 @@ export {
   stageIndex,
   isMaxStage,
   nextStage,
+  mostRecentFish,
 } from './model';
 export type { Fish, FishHealth, SpeciesId, Stage, Species, StageVisualParams } from './model';
 export { buildFishGeometry } from './geometry';

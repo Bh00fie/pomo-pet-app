@@ -1,8 +1,10 @@
+import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { getSpecies, type Fish } from '@/features/pet/model';
+import { getSpecies } from '@/features/pet/model';
 import { classifySessionLength } from '@/features/pet/reward';
 import {
+  selectFish,
   selectHydrated,
   selectNewestFish,
   selectSettings,
@@ -14,6 +16,8 @@ import { colors, radius, spacing } from '@/theme';
 import { Button, Card, Screen, Text } from '@/ui';
 import { isAtSessionBound, stepSessionMinutes } from './durations';
 import type { TimerMode } from './machine';
+import { MiniTankPeek } from './MiniTankPeek';
+import { SessionCompleteScreen } from './SessionCompleteScreen';
 import { TimerRing } from './TimerRing';
 import { useTimer } from './useTimer';
 
@@ -31,11 +35,26 @@ export function FocusScreen() {
   // active session would not actually hatch.
   const activeSpeciesName = getSpecies(useAppStore(selectSpawnSpeciesId)).name;
   const newestFish = useAppStore(selectNewestFish);
+  const fish = useAppStore(selectFish);
   const timer = useTimer();
+  const router = useRouter();
 
   const otherMode: TimerMode = timer.mode === 'focus' ? 'break' : 'focus';
   // Only a completed *focus* session hatches anything — a finished break must not claim a fish.
+  // This is the concept gallery's whole-screen Session Complete moment (see CLAUDE.md), so it
+  // replaces this screen's entire tree rather than sharing space with the idle/running body.
   const showHatchResult = timer.isCompleted && timer.mode === 'focus';
+
+  if (showHatchResult) {
+    return (
+      <SessionCompleteScreen
+        fish={newestFish}
+        durationMinutes={Math.round(timer.durationMs / 60_000)}
+        onStartAnother={timer.reset}
+        onSeeTank={() => router.navigate('/aquarium')}
+      />
+    );
+  }
 
   return (
     <Screen>
@@ -104,6 +123,15 @@ export function FocusScreen() {
         </View>
       </View>
 
+      {/* Concept-gallery "Your tank" preview (see CLAUDE.md) — idle/running only, never on the
+          Session Complete screen above (that already has its own earned-fish card) and never
+          while paused/abandoned, matching the concept's own idle/running placement. */}
+      {(timer.isIdle || timer.isRunning) && (
+        <View style={styles.peek}>
+          <MiniTankPeek fish={fish} />
+        </View>
+      )}
+
       {timer.isIdle ? (
         <Card>
           <Text variant="label" color="textMuted">
@@ -126,18 +154,7 @@ export function FocusScreen() {
           <Text variant="label" color="textMuted">
             {timer.isCompleted ? 'SESSION COMPLETE' : 'IN SESSION'}
           </Text>
-          {/* Naming the fish is the point, and it is what the concept's "+1 Fry earned" card did:
-              the reward is a specific animal, so saying so beats "a new fish hatched". */}
-          {showHatchResult && newestFish !== null ? (
-            <>
-              <Text variant="heading" color="kelp">
-                {hatchHeadline(newestFish)}
-              </Text>
-              <Text color="textMuted">Check the Aquarium tab.</Text>
-            </>
-          ) : (
-            <Text color="textMuted">{sessionHint(timer.status, timer.mode)}</Text>
-          )}
+          <Text color="textMuted">{sessionHint(timer.status, timer.mode)}</Text>
         </Card>
       )}
     </Screen>
@@ -151,19 +168,6 @@ function statusLabel(mode: TimerMode, status: string): string {
   return mode === 'focus' ? 'FOCUS' : 'BREAK';
 }
 
-/** Stage names as a user reads them, rather than the lowercase `StageId` the domain stores. */
-const STAGE_LABELS: Record<Fish['stage'], string> = {
-  fry: 'Fry',
-  juvenile: 'Juvenile',
-  elder: 'Elder',
-};
-
-/** "A Golden Koi Juvenile hatched." — reads the species off the fish itself, not off the active
- *  species setting, because a long session draws its species at random and the two disagree. */
-function hatchHeadline(fish: Fish): string {
-  return `A ${getSpecies(fish.speciesId).name} ${STAGE_LABELS[fish.stage]} hatched.`;
-}
-
 function sessionHint(status: string, mode: TimerMode): string {
   switch (status) {
     case 'running':
@@ -173,9 +177,9 @@ function sessionHint(status: string, mode: TimerMode): string {
     case 'paused':
       return 'Paused. Remaining time is held exactly where you left it.';
     case 'completed':
-      return mode === 'focus'
-        ? 'Session finished. Check the Aquarium tab — a new fish hatched.'
-        : 'Break over. Back to focus when you are ready.';
+      // Only a completed *break* ever reaches this hint — a completed focus session is diverted
+      // to `SessionCompleteScreen` before this Card renders at all (see `showHatchResult` above).
+      return 'Break over. Back to focus when you are ready.';
     default:
       return 'Session ended early. Nothing was awarded.';
   }
@@ -310,6 +314,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   actions: { alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
+  peek: { alignItems: 'center', paddingVertical: spacing.md },
   switch: {
     flexDirection: 'row',
     gap: spacing.xs,

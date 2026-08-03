@@ -17,19 +17,27 @@ import { useTimerStore } from '../useTimerStore';
 
 /**
  * Same local Skia stub as `ShopScreen.test.tsx`, and for the same reason: Skia ships ESM that
- * `jest-expo` does not transform and its own setup wants a CanvasKit wasm build. The only Skia on
- * this screen is `TimerRing`'s progress arc, which is decoration over the timing logic under test —
- * nothing below reads a pixel. The clock text lives in a plain RN `Text` overlay, not inside the
- * Canvas, so every assertion about the countdown still exercises the real thing.
+ * `jest-expo` does not transform and its own setup wants a CanvasKit wasm build. `TimerRing`'s
+ * progress arc only ever needed `Path`/`addCircle`, but the mini-tank peek (`MiniTankPeek` ->
+ * `SpeciesSwatch`) can now mount too whenever the store already holds a fish while idle/running —
+ * several tests below seed one before rendering — so this needs `SpeciesSwatch`'s full Skia
+ * surface (`Circle`/`Oval`/`Rect`, and `moveTo`/`quadTo`/`close`/`addOval` on the path), not just
+ * `TimerRing`'s. Nothing below reads a pixel either way; the clock text lives in a plain RN `Text`
+ * overlay, not inside the Canvas, so every assertion about the countdown still exercises the real
+ * thing.
  */
 jest.mock('@shopify/react-native-skia', () => {
   const inert = () => null;
+  const path = { moveTo: inert, quadTo: inert, addCircle: inert, addOval: inert, close: inert };
   return {
     __esModule: true,
     Canvas: ({ children }: { children?: React.ReactNode }) => children ?? null,
     Group: ({ children }: { children?: React.ReactNode }) => children ?? null,
+    Circle: inert,
+    Oval: inert,
     Path: inert,
-    Skia: { Path: { Make: () => ({ addCircle: inert }) } },
+    Rect: inert,
+    Skia: { Path: { Make: () => path } },
   };
 });
 
@@ -39,6 +47,16 @@ jest.mock('../notifications', () => ({
   ensureNotificationPermission: jest.fn().mockResolvedValue(true),
   scheduleSessionEndNotification: jest.fn().mockResolvedValue('scheduled-id'),
   cancelSessionEndNotification: jest.fn().mockResolvedValue(undefined),
+}));
+
+const mockNavigate = jest.fn();
+/** `FocusScreen` navigates to the Aquarium tab from the new Session Complete screen's "See your
+ *  tank" button (`useRouter().navigate('/aquarium')`). Real `expo-router` hooks need the router
+ *  context `app/_layout.tsx` provides, which this file's bare `render(<FocusScreen />)` does not
+ *  set up — mocked the same way `notifications` above is, for the same reason. */
+jest.mock('expo-router', () => ({
+  __esModule: true,
+  useRouter: () => ({ navigate: mockNavigate }),
 }));
 
 const MINUTE = 60_000;
@@ -67,6 +85,7 @@ beforeEach(() => {
   jest.useFakeTimers();
   jest.setSystemTime(NOW);
   (AppState.addEventListener as jest.Mock).mockClear();
+  mockNavigate.mockClear();
 
   useAppStore.setState((s) => ({
     hydrated: true,
@@ -133,7 +152,7 @@ describe('FocusScreen', () => {
     expect(screen.getByText('19:00')).toBeTruthy();
   });
 
-  it('completes exactly at the boundary', async () => {
+  it('completes exactly at the boundary, and hands off to the Session Complete screen', async () => {
     await render(<FocusScreen />);
     await fireEvent.press(screen.getByText('Start focus session'));
 
@@ -143,9 +162,11 @@ describe('FocusScreen', () => {
 
     await advance(1_000);
     expect(useTimerStore.getState().timer.status).toBe('completed');
-    expect(screen.getByText('00:00')).toBeTruthy();
-    expect(screen.getByText('FOCUS COMPLETE')).toBeTruthy();
-    expect(screen.getByText('Start break')).toBeTruthy();
+    // A completed *focus* session replaces the whole screen (see `SessionCompleteScreen.test.tsx`
+    // for its own coverage) — the ring/clock and the old "Start break" affordance are gone.
+    expect(screen.getByText('Session complete')).toBeTruthy();
+    expect(screen.getByText('See your tank')).toBeTruthy();
+    expect(screen.queryByText('00:00')).toBeNull();
   });
 
   it('abandons the session from Give up', async () => {
@@ -357,8 +378,37 @@ describe('FocusScreen', () => {
 
       await render(<FocusScreen />);
 
-      expect(screen.getByText('SESSION COMPLETE')).toBeTruthy();
+      expect(screen.getByText('Session complete')).toBeTruthy();
       expect(screen.getByText('A Golden Koi Juvenile hatched.')).toBeTruthy();
+    });
+
+    it('navigates to the Aquarium tab from "See your tank"', async () => {
+      useAppStore.setState({
+        fish: [{ id: 'new', speciesId: GOLDEN_KOI_SPECIES_ID, stage: 'juvenile', bornAt: 2, health: 'healthy' }],
+      });
+      useTimerStore.setState({
+        timer: { status: 'completed', mode: 'focus', endsAt: NOW, durationMs: 25 * MINUTE, pausedRemainingMs: 0 },
+      });
+
+      await render(<FocusScreen />);
+      await fireEvent.press(screen.getByText('See your tank'));
+
+      expect(mockNavigate).toHaveBeenCalledWith('/aquarium');
+    });
+
+    it('"Start another session" returns to the idle Focus state', async () => {
+      useAppStore.setState({
+        fish: [{ id: 'new', speciesId: GOLDEN_KOI_SPECIES_ID, stage: 'juvenile', bornAt: 2, health: 'healthy' }],
+      });
+      useTimerStore.setState({
+        timer: { status: 'completed', mode: 'focus', endsAt: NOW, durationMs: 25 * MINUTE, pausedRemainingMs: 0 },
+      });
+
+      await render(<FocusScreen />);
+      await fireEvent.press(screen.getByText('Start another session'));
+
+      expect(useTimerStore.getState().timer.status).toBe('idle');
+      expect(screen.getByText('Start focus session')).toBeTruthy();
     });
 
     it('does not claim a fish when it was a *break* that completed', async () => {
@@ -385,10 +435,8 @@ describe('FocusScreen', () => {
 
       await render(<FocusScreen />);
 
-      expect(screen.getByText('SESSION COMPLETE')).toBeTruthy();
-      expect(
-        screen.getByText('Session finished. Check the Aquarium tab — a new fish hatched.'),
-      ).toBeTruthy();
+      expect(screen.getByText('Session complete')).toBeTruthy();
+      expect(screen.getByText('A new fish hatched.')).toBeTruthy();
     });
 
     it('completes normally when a brief within-grace excursion happens to span `endsAt`', async () => {

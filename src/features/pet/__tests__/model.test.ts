@@ -8,6 +8,7 @@ import {
   SHARK_SPECIES_ID,
   CLOWNFISH_SPECIES_ID,
   isMaxStage,
+  mostRecentFish,
   nextStage,
   SPECIES,
   SPECIES_ORDER,
@@ -201,6 +202,33 @@ describe('stage helpers', () => {
     expect(nextStage('fry')).toBe('juvenile');
     expect(nextStage('juvenile')).toBe('elder');
     expect(nextStage('elder')).toBeNull();
+  });
+});
+
+describe('mostRecentFish', () => {
+  const fish: Fish[] = [
+    { id: 'a', speciesId: STARTER_SPECIES_ID, stage: 'fry', bornAt: 1, health: 'healthy' },
+    { id: 'b', speciesId: STARTER_SPECIES_ID, stage: 'fry', bornAt: 3, health: 'healthy' },
+    { id: 'c', speciesId: STARTER_SPECIES_ID, stage: 'fry', bornAt: 2, health: 'healthy' },
+    { id: 'd', speciesId: STARTER_SPECIES_ID, stage: 'fry', bornAt: 4, health: 'healthy' },
+  ];
+
+  it('returns the newest fish first, capped at the limit', () => {
+    expect(mostRecentFish(fish, 3).map((f) => f.id)).toEqual(['d', 'b', 'c']);
+  });
+
+  it('returns everything, still ordered, when the limit exceeds the collection', () => {
+    expect(mostRecentFish(fish, 10).map((f) => f.id)).toEqual(['d', 'b', 'c', 'a']);
+  });
+
+  it('returns an empty array for an empty collection', () => {
+    expect(mostRecentFish([], 3)).toEqual([]);
+  });
+
+  it('never mutates its input', () => {
+    const copy = [...fish];
+    mostRecentFish(fish, 2);
+    expect(fish).toEqual(copy);
   });
 });
 
