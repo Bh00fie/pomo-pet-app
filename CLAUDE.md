@@ -355,7 +355,9 @@ milestone**, and it carries the $99 decision gate.
   ~10 KB, and the species pass **nothing measurable at all**. Verified a **fourth** time on the
   same day after the reward rearchitecture and its review: **`npm test` 362/362 (19 suites),
   `npx tsc --noEmit` clean, `npx expo-doctor` 18/18** — the rearchitecture is net *negative* code,
-  so no bundle re-measure was taken.
+  so no bundle re-measure was taken. Verified a **fifth** time on 2026-08-03 after closing the
+  three concept-gallery gaps (Session Complete, the mini-tank peek, the rounded font): **`npm test`
+  383/383 (23 suites), `npx tsc --noEmit` clean, `npx expo-doctor` 18/18**.
 - **Not verified**: anything needing the user's phone, which is now *every remaining MVP item*.
   `docs/PLAN.md` holds the **consolidated nine-step on-device checklist** covering all six
   milestones plus the debug panel and the new hatch tiers, in one pass — use that rather than the six scattered per-milestone gates. In short:
@@ -927,7 +929,50 @@ Closed in `34f1986`:
   for something already knowable, plus a schema bump. Guarded on `mode === 'focus'` so a finished
   break cannot claim the fish sitting in the store — mutation-checked.
 
-**Still open, and each needs the user rather than an agent:**
+Closed in `37fce6c` (Session Complete + mini-tank peek) and `877797f` (rounded font) — all three
+items the user explicitly approved building post-checklist:
+
+- **Session Complete now exists as its own moment.** `src/features/timer/SessionCompleteScreen.tsx`
+  takes over the Focus tab's entire tree — badge, "Session complete", the duration, an earned card,
+  "See your tank" (`useRouter().navigate('/aquarium')`) and "Start another session" (`timer.reset()`,
+  back to the idle Focus state — it does not jump straight into a new session) — exactly when
+  `timer.isCompleted && timer.mode === 'focus'`, which `FocusScreen` checks *before* returning its
+  normal tree rather than sharing space with it. A completed **break** never reaches this screen
+  (the guard is on `mode`, unchanged from the inline-card version). The earned-card copy reuses the
+  exact `hatchHeadline` naming logic the old inline card had — pulled out into pure
+  `src/features/timer/sessionComplete.ts` (no React import) rather than duplicated, and still reads
+  the species off the **fish** (`selectNewestFish`), not off `activeSpeciesId`, for the same reason
+  as before: a long session's random draw can disagree with the active species. The badge is two
+  flat circles (`colors.sun` behind `colors.coral`), not a real radial gradient — there is no
+  gradient dependency in this project, and one felt like too much for a single badge.
+- **The Focus screen now has a mini-tank peek.** `src/features/timer/MiniTankPeek.tsx` shows up to
+  3 of the user's most recently hatched fish (`pet/model.ts`'s new `mostRecentFish`, newest-first,
+  pure and allocation-cheap) below the timer, visible only while idle or running — never on the
+  Session Complete screen above (which already has its own earned-fish card) and never while
+  paused/abandoned. Deliberately non-interactive: no tap target, no navigation, a peek rather than a
+  second aquarium. Reuses `SpeciesSwatch` (the Shop's static single-fish Skia renderer) rather than
+  a third copy of the fish-drawing code — `SpeciesSwatch` gained an optional `stage` prop (defaulting
+  to `'elder'`, its one prior caller's behavior unchanged) so the peek can draw each fish at its own
+  *actual* stage instead of always Elder.
+- **The display face is now the rounded system design, and no font file was bundled.** Apple's SF
+  Pro Rounded TTF is real but its license restricts it to UI mockups/previews — it may not be
+  embedded in a shipped app — so the obvious "just bundle the font" fix was never on the table.
+  The fix that *was* available needed real investigation, not a guess: `'ui-rounded'` is one of the
+  CSS Fonts Level 4 generic family keywords, and it turns out RN's own iOS text layout manager
+  special-cases it. Read straight out of this project's own `node_modules/react-native` (0.81, not
+  assumed from a blog post): `RCTFontUtils.mm`'s `RCTGetFontDescriptorSystemDesign` maps the string
+  to `UIFontDescriptorSystemDesignRounded`, then asks the system font's own descriptor for that
+  design — Apple's own documented, sanctioned API for the rounded face, with iOS resolving it from
+  whatever system font is already on the device. Nothing is bundled and nothing needed licensing;
+  `expo-font` was never required either. `src/theme/typography.ts`'s `display`/`title`/`heading`
+  tokens (the prominent, short-text faces — the clock, headings, screen titles) now carry
+  `fontFamily: 'ui-rounded'` on iOS; `body`/`label`/`caption` keep the plain `'System'` face, since a
+  bubbly rounded design at 11–15px reads as a legibility cost rather than warmth. **This corrects a
+  wrong claim** that was in this file until now — "React Native has no reliable way to reach the
+  rounded system face without bundling a font file" was never actually verified against the RN
+  source, and it was wrong.
+
+**Still open, and needs the user rather than an agent:**
 
 - **The ground hue is wrong, and it is the first thing anyone notices.** The concept is deep
   **teal** (`#123F3A` / `#0B2E2B`, with seafoam `#6FBFAE` and gold `#E8A93C`); the app shipped deep
@@ -936,18 +981,6 @@ Closed in `34f1986`:
   change, **but it is not really one file**: all five species hues were authored against navy, and
   Indigo Betta (248) against a green ground and Reef Shark (205 at saturation 14) against teal are
   the two that would need re-tuning. A taste call with a re-tuning tail — do not swap it silently.
-- **Session Complete does not exist as a moment.** The concept gives it a whole screen: a gold→coral
-  radial badge, "Session complete", "25 minutes of focus, banked.", the earned card, and a "See your
-  tank" button. The app swaps a card on the Focus screen instead. This matters *more* under the new
-  reward model than it did under XP — every session now hatches a real animal, so there is finally
-  something worth a reveal. **Deliberately not built**: it is a new screen, and this file's standing
-  rule is no new features before the on-device checklist is done. Worth doing straight after.
-- **The Focus screen has no mini-tank peek.** The concept shows a "Your tank" label over a row of
-  three fish thumbnails, so the reward is visible from the screen you spend time on. Not built.
-- **No rounded display face.** The concept's display type is `ui-rounded` / SF Pro Rounded, which is
-  a large part of why it reads warm rather than corporate. React Native has no reliable way to reach
-  the rounded system face without bundling a font file, so this stays open on purpose rather than
-  being faked with a weight change.
 
 ### Commit convention
 

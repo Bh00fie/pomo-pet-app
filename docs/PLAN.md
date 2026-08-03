@@ -703,6 +703,17 @@ yourself fish through them would only prove the debug button works.
    tank gets exactly what the preview promised. This is also the first honest look at the new
    pacing: a fish per session is either the right amount of feedback or too much, and only real
    use answers that.
+10. **The three concept-gallery gaps closed after M6a** (see CLAUDE.md's "Concept gallery vs. the
+    built app"). Complete a focus session and confirm the Session Complete screen actually takes
+    over the whole Focus tab — badge, "Session complete", the earned-fish card, "See your tank"
+    (jumps to the Aquarium tab) and "Start another session" (returns to the idle Focus state, not
+    straight into a new session). Confirm a completed **break** does *not* show it. On the normal
+    Focus screen (idle or running), confirm the "YOUR TANK" mini preview shows up to 3 of your
+    most recently hatched fish and is not tappable. Finally, look at the clock digits, the Focus
+    screen's headings and any screen title: on a real device this is `ui-rounded`'s actual SF Pro
+    Rounded design (iOS resolves it live from the on-device system font — no bundled font file),
+    which a simulator sometimes renders closer to the plain system face; judge the *warmth* on a
+    physical phone, not the simulator.
 
 ### Known and accepted limitations at the close of M6a
 
