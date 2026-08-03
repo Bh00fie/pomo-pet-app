@@ -309,10 +309,14 @@ export const selectHydrated = (s: AppStore) => s.hydrated;
  */
 export const selectSpawnSpeciesId = (s: AppStore) => resolveSpawnSpeciesId(s);
 /**
- * The most recently hatched fish, or `null` on an empty collection — the same "max `bornAt`, ties
- * to the later array entry" rule `applyPenalty` and `cureOneSickFish` use, so the three cannot
- * disagree about which fish is newest. Returns an element of `fish` rather than a derived object,
- * so a subscriber does not re-render on every unrelated store write.
+ * The most recently hatched fish, or `null` on an empty collection. Shares the "max `bornAt`, ties
+ * to the later array entry" tie rule with `applyPenalty` and `cureOneSickFish`, but **not** their
+ * health filter: those two deliberately walk past fish of the wrong health (the penalty wants the
+ * newest *healthy* one, the cure the newest *sick* one), while this is simply the newest fish there
+ * is. Do not "unify" the three — the filters are the point of each.
+ *
+ * Returns an element of `fish` rather than a derived object, so a subscriber does not re-render on
+ * every unrelated store write.
  *
  * Used by the Focus screen to name what the session just produced. It is derived rather than
  * recorded because a completed session's hatch *is* the newest fish by construction — carrying a

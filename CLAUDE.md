@@ -396,6 +396,20 @@ Fixed already:
   `reduce` with `>` keeps the first match and fish are only ever appended, so two hatches in the
   same millisecond — two debug presses, or a hatch and a merge — sickened the earlier of the pair.
   Now `>=`, matching the new cure rule.
+- **`applyPenalty` no-op'd when the newest fish was already sick** (rearchitecture review flag,
+  **then fixed** in `a76c7cd`). Two abandons in a row cost one fish, not two, even with healthy fish
+  sitting right there. It now walks for the newest **healthy** fish, falling through as needed — a
+  cleaner mirror of `cureOneSickFish` (newest *sick*) than the original, since the two now differ
+  only in which health they look for. **The tie rule is shared but the health filter is not, and
+  that is deliberate**: `selectNewestFish` is a third variant with no filter at all (the newest fish
+  full stop, for naming what a session hatched). Do not unify them.
+- **The long-session draw could pick an unlocked-but-uncatalogued species** (rearchitecture review
+  flag, **then fixed** in `a76c7cd`). `resolveOwnedCatalogSpeciesIds` filters
+  `unlockedSpeciesIds` down to ids still in `SPECIES_ORDER` before it is used as a draw pool, by
+  both the real long-session path and the debug panel — the same re-validation discipline
+  `resolveSpawnSpeciesId` already applied to the active species. Closes the asymmetry the
+  rearchitecture introduced. Unreachable in practice, fixed anyway because the guard is one line and
+  the surrounding discipline was already established.
 - **The Stats screen did not fill the device** (phone-screenshot polish). Everything on it is
   fixed-height, so on a 6.1" phone ~470pt of content sat in ~698pt of usable height and left ~230pt
   of dead space under the LEFT EARLY card. The 7-day chart now flexes to absorb the slack (bar
@@ -649,28 +663,14 @@ Flagged for the user, deliberately not fixed unilaterally:
   generous" is the same *kind* of mistake the old numbers made in the other direction. The knobs
   are `REWARDS.longSessionThresholdMinutes` and the two stage choices in `reward.ts`. **Judge it
   from real use on the phone, not from the debug panel.**
-- **`applyPenalty` is a no-op when the newest fish is already sick, even with healthy fish
-  present** (new, rearchitecture review). Two abandons in a row cost one fish, not two. It is the
-  exact mirror of the one-cure-per-session rule and defensible on that symmetry, but nobody chose
-  it explicitly — it fell out of the target-selection change. The alternative is to fall through to
-  the newest *healthy* fish.
-- **A long session can draw a species that is unlocked but not in the catalog** (new,
-  rearchitecture review). The pool is `entitlements.unlockedSpeciesIds` verbatim, and the v1→v2
-  migration deliberately preserves unrecognised stored ids. Not reachable today — the only writers
-  are the Shop and the mock provider, both of which deal in `SPECIES_ORDER` ids — but note the
-  asymmetry: the *active*-species path is re-validated on every read specifically because a
-  persisted species id is not trusted, and this new path widened the same surface without the same
-  guard. A fish with an unknown `speciesId` would render as the starter (`getSpecies` falls back)
-  but could never merge with a real Tetra. A one-line filter closes it; left alone as unreachable
-  rather than added speculatively.
-- **The Focus screen's timer block pools ~120pt of empty space above and below itself** (new,
-  phone-screenshot polish; **not changed**). Measured on a 6.1" device: the body is `flex: 1` with
-  `justifyContent: 'center'`, so the screen *does* reach the bottom — the session-lengths card is
-  bottom-anchored — but roughly 120pt of slack sits between the Start button and that card, and the
-  same again above the status caption. That is deliberate vertical centering of the app's hero
-  element, not a layout bug, and the one-token fix (`space-evenly`) loosens the whole timer stack.
-  Not a call to make without looking at a screen. The cramped half of the same complaint — zero
-  clearance under the card — is fixed.
+- **The Focus screen's timer block pools empty space above and below itself** (phone-screenshot
+  polish; **not changed, and now smaller**). The body is `flex: 1` with `justifyContent: 'center'`,
+  so the screen *does* reach the bottom — the session-lengths card is bottom-anchored — but slack
+  sits between the Start button and that card and again above the status caption. It measured ~120pt
+  each side against the old 6pt linear bar; the 200pt `TimerRing` that replaced it absorbs most of
+  that, so this is now a much smaller complaint. Still deliberate vertical centering of the app's
+  hero element rather than a layout bug, and the one-token fix (`space-evenly`) loosens the whole
+  timer stack. Judge it on the phone.
 - **`SpeciesSwatch` clips every species' tail, and the Reef Shark can least afford it** (new,
   species-pass review; **pre-existing since M6a**, which is why it was not changed unilaterally).
   `scale = (size * 0.42) / bodyRadiusX` fits the *body* into 84% of a 44pt canvas, leaving ~3.5pt
@@ -871,6 +871,14 @@ Two published concept galleries exist for this project — check both before doi
   The primary design reference: the procedural fish system (Fry/Juvenile/Elder growth stages),
   the merge mechanic diagram, the animated aquarium tank, and all 5 app screens (Focus, Session
   Complete, Aquarium, Stats, Shop). Built before M0 existed, so it predates the real theme tokens.
+  **Audited against the built app on 2026-08-03 — see "Concept gallery vs. the built app" below.**
+- **Species catalog (2026-08-03)** — https://claude.ai/code/artifact/e3640010-7193-4bdf-ba37-867ab3097a3b
+  All five species at all three stages, rendered live from a faithful port of `buildFishGeometry`,
+  `hslToHex` and `Fish.tsx`'s draw order/wag constants, each beside its own `stageParams` record.
+  Also shows the merge progression at true scale, the healthy/sick states, and the `SpeciesSwatch`
+  tail-clipping problem side by side with the full geometry. **Unlike the concept gallery this one
+  is generated from the shipped source**, so it stays accurate as long as the ports match — if
+  `geometry.ts` changes, this page needs regenerating or it becomes a second source of truth.
 - **3D vs 2D tank comparison** — https://claude.ai/code/artifact/50773e34-7db6-46ac-b803-6a5fb4dffe93
   Narrower: the 3 tank shapes (box/bowl/cylinder) rendered live in 2D canvas, plus the 5 screens
   restyled with the real color/type tokens from `src/theme/`. Built to support the 3D feasibility
@@ -884,6 +892,62 @@ gallery — self-contained preview cards, each with a `<!-- @dsCard group="..." 
 the environment where that work ran, so the previews were built as portable HTML instead. They are
 already shaped for DesignSync (`@dsCard` headers, no external requests) if the tool becomes
 available later.
+
+### Concept gallery vs. the built app (audited 2026-08-03)
+
+Read the concept gallery's actual markup rather than trusting the summary. **Three of the five
+screens match structurally and needed nothing**: Aquarium (title + count pill + tank + merge
+control), Stats (2×2 tile grid + 7-day bar card) and Shop (thumb + name + price pill rows +
+Restore) all landed as drawn. The divergences are all on Focus, plus one whole screen that was
+never built:
+
+Closed in `34f1986`:
+
+- **The progress indicator was a linear bar, not a ring.** The concept specifies a circular ring
+  (r=66, stroke 10, in a 150 box, coral, round cap, sweeping from twelve) with the clock centred
+  inside; M1 shipped a 240×6 linear track. Now `src/features/timer/TimerRing.tsx`, in Skia (already
+  a dependency — **not** `react-native-svg`, which is not installed), as one circle path stroked
+  twice with the second copy trimmed via `end`. **It owns no frame loop** — `progress` is a plain
+  number `useTimer` already recomputes every `TIMER.tickIntervalMs`, so the M2 "one clock, never a
+  second frame driver" rule is intact. Ratios (`RADIUS_RATIO`/`STROKE_RATIO`) are kept off the
+  concept's own numbers so the ring can be resized without re-tuning its weight.
+- **The clock had no tabular figures, and that is a real defect rather than a style gap.**
+  Proportional digits change width every second, so a centred readout jitters horizontally — much
+  more visible now that it sits inside a fixed ring. `fontVariant: ['tabular-nums']` on the clock
+  and on the four Stats tiles. **Deliberate deviation kept:** the concept sets the clock in a mono
+  face at weight 700; the app keeps the light system face (closer to iOS's own timers) and takes
+  only the tabular metric.
+- **The streak was a bare line of text**, not the concept's pill chip with the flame. Now a chip.
+- **Nothing told the user what they had earned.** The concept's Session Complete screen carries an
+  "earned card" reading "+1 Fry earned"; the app's completed state said only "a new fish hatched".
+  Now names it — "A Golden Koi Juvenile hatched." — reading the species off the **fish**, not off
+  `activeSpeciesId`, because a long session draws at random and the two genuinely disagree. Derived
+  through the new `selectNewestFish` rather than recorded: a completed session's hatch *is* the
+  newest fish by construction, so a persisted `lastHatchedFishId` would be a second source of truth
+  for something already knowable, plus a schema bump. Guarded on `mode === 'focus'` so a finished
+  break cannot claim the fish sitting in the store — mutation-checked.
+
+**Still open, and each needs the user rather than an agent:**
+
+- **The ground hue is wrong, and it is the first thing anyone notices.** The concept is deep
+  **teal** (`#123F3A` / `#0B2E2B`, with seafoam `#6FBFAE` and gold `#E8A93C`); the app shipped deep
+  **navy** (`#07131F` / `#04101A`, kelp `#4FD1A5`, sun `#FFD166`). Coral and Mist survived almost
+  exactly (`#FF6B4A`→`#FF8A65`, `#EAF3EE`→`#EAF4FF`). Tokens mean the page chrome is a one-file
+  change, **but it is not really one file**: all five species hues were authored against navy, and
+  Indigo Betta (248) against a green ground and Reef Shark (205 at saturation 14) against teal are
+  the two that would need re-tuning. A taste call with a re-tuning tail — do not swap it silently.
+- **Session Complete does not exist as a moment.** The concept gives it a whole screen: a gold→coral
+  radial badge, "Session complete", "25 minutes of focus, banked.", the earned card, and a "See your
+  tank" button. The app swaps a card on the Focus screen instead. This matters *more* under the new
+  reward model than it did under XP — every session now hatches a real animal, so there is finally
+  something worth a reveal. **Deliberately not built**: it is a new screen, and this file's standing
+  rule is no new features before the on-device checklist is done. Worth doing straight after.
+- **The Focus screen has no mini-tank peek.** The concept shows a "Your tank" label over a row of
+  three fish thumbnails, so the reward is visible from the screen you spend time on. Not built.
+- **No rounded display face.** The concept's display type is `ui-rounded` / SF Pro Rounded, which is
+  a large part of why it reads warm rather than corporate. React Native has no reliable way to reach
+  the rounded system face without bundling a font file, so this stays open on purpose rather than
+  being faked with a weight change.
 
 ### Commit convention
 
