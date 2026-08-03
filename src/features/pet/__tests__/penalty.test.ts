@@ -22,6 +22,18 @@ describe('applyPenalty', () => {
     expect(updatedNewer.health).toBe('sick');
   });
 
+  it('falls through to the next-most-recent healthy fish when the newest is already sick — two '
+    + 'abandons in a row must cost two fish, not one, whenever a second healthy fish exists', () => {
+    const oldest: Fish = { ...createFish(STARTER_SPECIES_ID, 1000, 'oldest'), health: 'healthy' };
+    const alreadySick: Fish = { ...createFish(STARTER_SPECIES_ID, 2000, 'newest'), health: 'sick' };
+
+    const result = applyPenalty({ fish: [oldest, alreadySick] });
+
+    expect(result.sickenedFishId).toBe('oldest');
+    expect(result.fish.find((f) => f.id === 'oldest')!.health).toBe('sick');
+    expect(result.fish.find((f) => f.id === 'newest')!.health).toBe('sick'); // untouched, already sick
+  });
+
   it('picks the most recent regardless of array order', () => {
     const newer = createFish(STARTER_SPECIES_ID, 2000, 'newer');
     const older = createFish(STARTER_SPECIES_ID, 1000, 'older');
@@ -40,13 +52,13 @@ describe('applyPenalty', () => {
     expect(applyPenalty({ fish: [first, second] }).sickenedFishId).toBe('second');
   });
 
-  it('is idempotent when the target is already sick, returning the same fish array reference', () => {
+  it('is a no-op, returning the same fish array reference, when every fish is already sick', () => {
     const alreadySick: Fish = { ...createFish(STARTER_SPECIES_ID, 0, 'sick-fish'), health: 'sick' };
     const input = [alreadySick];
 
     const result = applyPenalty({ fish: input });
 
-    expect(result.sickenedFishId).toBe('sick-fish');
+    expect(result.sickenedFishId).toBeNull();
     expect(result.fish).toBe(input); // no-op: same array reference, nothing re-created
   });
 

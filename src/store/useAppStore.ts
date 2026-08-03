@@ -6,7 +6,7 @@ import { APP, TIMER } from '@/config';
 // which imports this store, and going through it here would create a module-load cycle.
 import { generateFishId } from '@/features/pet/id';
 import { evaluateMerge, type MergeResult } from '@/features/pet/merge';
-import { STARTER_SPECIES_ID, type SpeciesId } from '@/features/pet/model';
+import { SPECIES_ORDER, STARTER_SPECIES_ID, type SpeciesId } from '@/features/pet/model';
 import { applyPenalty } from '@/features/pet/penalty';
 import { applySessionReward, hatchFish, pickRandomSpeciesId } from '@/features/pet/reward';
 import { applyCompletedSessionToStreak, toLocalDateString } from '@/features/streak';
@@ -26,6 +26,17 @@ function resolveSpawnSpeciesId(s: Pick<AppStore, 'settings' | 'entitlements'>): 
   return s.entitlements.unlockedSpeciesIds.includes(s.settings.activeSpeciesId)
     ? s.settings.activeSpeciesId
     : STARTER_SPECIES_ID;
+}
+
+/**
+ * The pool a long session's (or the debug panel's) Juvenile is drawn from: `unlockedSpeciesIds`
+ * filtered down to ids that still exist in `SPECIES_ORDER`, same re-validation spirit as
+ * `resolveSpawnSpeciesId` above — a persisted id is never trusted as still valid on its own.
+ * Falls back to the starter species if that filter ever empties the pool.
+ */
+function resolveOwnedCatalogSpeciesIds(s: Pick<AppStore, 'entitlements'>): SpeciesId[] {
+  const owned = s.entitlements.unlockedSpeciesIds.filter((id) => SPECIES_ORDER.includes(id));
+  return owned.length > 0 ? owned : [STARTER_SPECIES_ID];
 }
 
 interface AppActions {
@@ -164,7 +175,7 @@ export const useAppStore = create<AppStore>()(
             now,
             idFactory: () => generateFishId(now),
             activeSpeciesId,
-            ownedSpeciesIds: s.entitlements.unlockedSpeciesIds,
+            ownedSpeciesIds: resolveOwnedCatalogSpeciesIds(s),
           });
 
           // Streak + basic stats update alongside the fish reward, in the same `set` — one
@@ -259,7 +270,7 @@ export const useAppStore = create<AppStore>()(
 
       debugHatchJuvenile: (now) =>
         set((s) => {
-          const speciesId = pickRandomSpeciesId(s.entitlements.unlockedSpeciesIds);
+          const speciesId = pickRandomSpeciesId(resolveOwnedCatalogSpeciesIds(s));
           const result = hatchFish(s.fish, 'juvenile', speciesId, now, () => generateFishId(now));
           return { fish: result.fish };
         }),
